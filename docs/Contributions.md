@@ -13,7 +13,7 @@ Accept it, then you’ll have permission to push and pull.
 ### Step 2 – Clone the project into RStudio
 1. In RStudio:  
    **File → New Project → Version Control → Git**  
-2. Paste the repository URL, e.g.  https://github.com//bayesproject-MaZhuFeng-FA25.git
+2. Paste the repository URL, e.g.  https://github.com/JonathanMa03/bayesproject-MaZhuFeng-FA25
 3. Choose a local folder (e.g., `~/Documents/RProjects/`).
 4. Click **Create Project**.
 
