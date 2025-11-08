@@ -1,5 +1,16 @@
-# bayesproject-MaZhuFeng-FA25
-This repository is for hosting the R-Project associated with JHU's EN.553.632 Bayesian Statistics, Fall 2025
+# Bayesian Hierarchical Modeling and Clustering of Adolescent Mental Health Risk Profiles
+
+This repository is for hosting the R-Project associated with JHU's EN.553.632 Bayesian Statistics, Fall 2025.
+
+Authors: Jonathan Ma, Chelsea Zhu, Amber Feng
+
+Aim: The goal of this project is to develop a Bayesian hierarchical modeling framework for understanding and predicting adolescent mental health outcomes using survey data from the Youth Risk Behavior Surveillance System (YRBS). Specifically, we aim to:
+- Model the likelihood that a student reports persistent feelings of sadness or hopelessness, using individual-level behavioral, lifestyle, and psychosocial risk factors as predictors.
+- Account for group-level variation across demographic categories (e.g., race/ethnicity, grade level) through hierarchical (multilevel) modeling.
+- Identify latent subgroups of adolescents with similar risk profiles using Bayesian clustering techniques.
+- Estimate and interpret posterior distributions of both model parameters and latent group assignments using modern MCMC methods, with appropriate diagnostics and model checking to ensure convergence and fit.
+
+Data Source: https://www.cdc.gov/yrbs/data/index.html. 
 
 ## Structure
 
