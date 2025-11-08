@@ -131,3 +131,11 @@ Once you make any change, it would be helpful to
 - JM 11/8: Changed formatting and instructions in Contributions.md.
 ```
 
+**TL;DR**: 
+- Press the "Pull" button
+- If you make a major change: Git > New Branch
+- If you make a minor change: Can commit directly to main
+- Make your changes, saving often
+- Check boxes next to changed files and click "Commit" then "Push"
+- On Github, click "Compare & pull request" and leave a message on what was done
+- After changes approved, click "Pull" in RStudio
