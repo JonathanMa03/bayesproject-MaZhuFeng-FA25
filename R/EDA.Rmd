@@ -1,0 +1,76 @@
+Project Idea: Bayesian Hierarchal Clustering Model pre-COVID vs post-COVID
+
+Loading data from both years, find common questions, add a year indicator
+
+```{r Data Loading}
+library(tidyverse)
+library(readr)
+library(forcats)
+library(ggplot2)
+library(janitor)
+
+yrbs19 <- read_csv("../data/raw/yrbs2019.csv") %>% clean_names() %>% mutate(year = 2019)
+yrbs21 <- read_csv("../data/raw/yrbs2021.csv") %>% clean_names() %>% mutate(year = 2021)
+
+# List of variables to keep
+vars_to_keep <- c(
+  "q1", "q2", "q3", "q4", # Grouping
+  "q30", "q31", "q32", "q33", "q34", "q35", "q36", "q37", # substance use
+  "q60", "q76", #sleep and screentime
+  "q77", "q78", "q79", #bullying/school safety
+  "q80", "q81", "q82", "q83", "q84"         # Mental health
+)
+
+# Select only matching variables
+yrbs19_selected <- yrbs19 %>% select(all_of(vars_to_keep), year)
+yrbs21_selected <- yrbs21 %>% select(all_of(vars_to_keep), year)
+
+# Combine
+yrbs_combined <- bind_rows(yrbs19_selected, yrbs21_selected)
+```
+
+We selected these variables to begin with:
+
+- Q30–Q37: Substance use
+- Q60, Q76: Sleep and screen
+- Q77–Q79: Bullying / school safety
+- Q80–Q84: Mental health
+- Q1–Q4: Use as hierarchical grouping variables
+
+compute % of complete cases
+
+```{r Checking Integrity}
+complete_pct <- mean(complete.cases(yrbs_combined)) * 100
+cat(sprintf("Percentage of rows without any NA: %.2f%%\n", complete_pct))
+```
+
+We have 45% of cases complete, with 13677 observations in 2019 and 17232 observations in 2021. Now I will filter complete cases only, and balance 2021 to match 2019 via a naive approach since we don't have information to "match" observations. REMARK: in processing write about information loss due to this naive approach. 
+
+```{r Balancing}
+# Keep complete cases only
+yrbs_complete <- yrbs_combined %>%
+  filter(complete.cases(.))
+
+# Check counts by year
+table(yrbs_complete$year)
+
+# Downsample 2021 to match 2019's count
+n_2019 <- yrbs_complete %>% filter(year == 2019) %>% nrow()
+
+yrbs_balanced <- yrbs_complete %>%
+  group_by(year) %>%
+  slice_sample(n = min(n_2019)) %>%
+  ungroup()
+
+# Step 4: Confirm new balance
+table(yrbs_balanced$year)
+
+dim(yrbs_balanced)
+```
+
+On this analysis, we have 23 variables with 13714 observations. 
+
+*TODO* : We can take one of two approaches
+
+- Conduct PCA to choose relevant variables
+- Feature Engineer via grouping mental health variables, etc.
