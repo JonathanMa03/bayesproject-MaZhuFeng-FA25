@@ -49,3 +49,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Ignore large or local data
+data/raw/seer_data.txt
