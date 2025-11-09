@@ -62,10 +62,8 @@ yrbs_balanced <- yrbs_complete %>%
   slice_sample(n = min(n_2019)) %>%
   ungroup()
 
-# Step 4: Confirm new balance
 table(yrbs_balanced$year)
 
-dim(yrbs_balanced)
 ```
 
 On this analysis, we have 23 variables with 13714 observations. 
@@ -74,3 +72,83 @@ On this analysis, we have 23 variables with 13714 observations.
 
 - Conduct PCA to choose relevant variables
 - Feature Engineer via grouping mental health variables, etc.
+
+Build the model on Year 2019, apply the model to Year 2021
+
+Grouping variable: Either Q1 (Age) or Q3 (Sexual Identity), due to balance
+
+```{r Identifying Group Variable}
+table(yrbs_balanced$year, yrbs_balanced$q1)
+table(yrbs_balanced$year, yrbs_balanced$q3)
+
+par(mfrow = c(1, 2))
+hist(yrbs_balanced$q1)
+hist(yrbs_balanced$q3)
+```
+
+Running PCA for Mental health, substance use, and bullying variables
+
+```{r PCA for Risk Variables}
+library(FactoMineR)
+library(dplyr)
+
+substance_vars <- yrbs_balanced %>% select(paste0("q", 30:37))
+pca_substance <- PCA(substance_vars, graph = TRUE)
+
+bullying_vars <- yrbs_balanced %>% select(paste0("q", 77:79))
+pca_bullying <- PCA(bullying_vars, graph = TRUE)
+
+mental_vars <- yrbs_balanced %>% select(paste0("q", 80:84))
+pca_mental <- PCA(mental_vars, graph = TRUE)
+```
+PCA shows that 
+
+for substance use, Q32, Q33, and Q37 are closest to the first dimension
+
+```{r PCA Substance}
+library(ggpubr)
+library(factoextra)
+
+fviz_pca_var(pca_substance, col.var = "contrib", repel = TRUE)
+print(pca_substance$var$contrib)
+```
+
+for school safety, either Q78 (bullying) or Q79 (feeling unsafe) could be retained
+
+```{r PCA Bullying}
+fviz_pca_var(pca_bullying, col.var = "contrib", repel = TRUE)
+print(pca_bullying$var$contrib)
+```
+
+for mental health, 
+Q80 (e.g., felt sad/hopeless) is the strongest on Dim 1—likely the most representative.
+Q82 (seriously considered suicide) is distinct and could be retained for a different dimension of mental health risk.
+
+```{r PCA Mental}
+fviz_pca_var(pca_mental, col.var = "contrib", repel = TRUE)
+print(pca_mental$var$contrib)
+```
+
+Summary:
+
+Keep *Q32* (vaping) for general use behavior or Q37 (prescription misuse) for distinct risk behavior.
+
+Pick Q77 for the general bullying construct or *Q78* if your focus is cyber/social risk (more modern, distinct cluster dimension).
+
+Keep *Q80* (broad depressive mood marker) or keep Q82 (suicide planning) if you want a separate dimension of suicidal intent.
+
+Final Dataset as of 11/9:
+Indicat0r Variable: 
+Year (For year 2019 or 2021)
+
+Grouping Variable: 
+Q3 (Sexual Identity)
+
+Covariates: 
+Q32 (Electronic Vape Usage)
+Q60 (Hours of Sleep)
+Q76 (Hours of screen time)
+Q78 (Electronically bullied)
+Q80 (Felt sad or hopeless)
+
+Once we get the final list of variables, I'll go in and replace the q# with a better name.
