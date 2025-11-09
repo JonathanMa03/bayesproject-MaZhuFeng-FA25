@@ -21,7 +21,7 @@ The goal of this project is to develop a **Bayesian hierarchical modeling framew
 
 ## Data Source
 
-**Dataset:** [U.S. Cancer Statistics Public Use Database (1999–2022)](https://www.cdc.gov/cancer/uscs/public-use/index.htm)  
+**Dataset:** [U.S. Cancer Statistics Public Use Database (1999–2022)](https://www.cdc.gov/united-states-cancer-statistics/dataviz/data-tables.html)  
 **Direct Data Download:** [USCS ASCII Data (Nov 2023)](https://www.cdc.gov/cancer/uscs/USCS-1999-2022-ASCII.zip)  
 **Dictionary:** `Data Dictionary USCS ASCII Nov_2023 submission.xlsx`
 
