@@ -1,16 +1,61 @@
-# Bayesian Hierarchical Modeling and Clustering of Adolescent Mental Health Risk Profiles
+# Bayesian Hierarchical Modeling and Clustering of Cancer Incidence and Mortality Patterns Across U.S. Counties
 
-This repository is for hosting the R-Project associated with JHU's EN.553.632 Bayesian Statistics, Fall 2025.
+This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2025)** at Johns Hopkins University.
 
-Authors: Jonathan Ma, Chelsea Zhu, Amber Feng
+**Authors:** Jonathan Ma, Chelsea Zhu, Amber Feng  
+**Instructor:** Dr. Luhao Zhang
 
-Aim: The goal of this project is to develop a Bayesian hierarchical modeling framework for understanding and predicting adolescent mental health outcomes using survey data from the Youth Risk Behavior Surveillance System (YRBS). Specifically, we aim to:
-- Model the likelihood that a student reports persistent feelings of sadness or hopelessness, using individual-level behavioral, lifestyle, and psychosocial risk factors as predictors.
-- Account for group-level variation across demographic categories (e.g., race/ethnicity, grade level) through hierarchical (multilevel) modeling.
-- Identify latent subgroups of adolescents with similar risk profiles using Bayesian clustering techniques.
-- Estimate and interpret posterior distributions of both model parameters and latent group assignments using modern MCMC methods, with appropriate diagnostics and model checking to ensure convergence and fit.
+---
 
-Data Source: https://www.cdc.gov/yrbs/data/index.html. 
+## Project Overview
+
+The goal of this project is to develop a **Bayesian hierarchical modeling framework** to understand geographic and demographic variation in cancer incidence and mortality across U.S. counties. Using publicly available data from the **U.S. Cancer Statistics (USCS)** database, the project aims to:
+
+- **Model** age-adjusted cancer incidence and mortality rates across counties and states.
+- **Account** for multi-level structure (county ⟶ state ⟶ national) using Bayesian hierarchical modeling.
+- **Estimate** uncertainty and posterior distributions of incidence and mortality rates with full Bayesian inference.
+- **Cluster** posterior summaries to identify latent regional or demographic patterns in cancer risk and outcomes.
+- **Evaluate** convergence and goodness-of-fit through posterior predictive checks and MCMC diagnostics.
+
+---
+
+## Data Source
+
+**Dataset:** [U.S. Cancer Statistics Public Use Database (1999–2022)](https://www.cdc.gov/cancer/uscs/public-use/index.htm)  
+**Direct Data Download:** [USCS ASCII Data (Nov 2023)](https://www.cdc.gov/cancer/uscs/USCS-1999-2022-ASCII.zip)  
+**Dictionary:** `Data Dictionary USCS ASCII Nov_2023 submission.xlsx`
+
+The dataset contains state- and county-level age-adjusted cancer incidence and mortality rates, stratified by sex, race, site, and event type. These data support a natural **three-level hierarchical structure**:
+
+1. **Level 1 – County:** Observations of incidence/mortality rates, counts, and populations  
+2. **Level 2 – State:** Geographic grouping variable  
+3. **Level 3 – National:** Aggregate U.S. level (implicit hyperprior pooling)
+
+---
+
+## 🔍 Methodology
+
+1. **Bayesian Hierarchical Modeling**  
+   - Outcome: Age-adjusted incidence or mortality rate  
+   - Levels: County (random effects), nested within State  
+   - Priors: Weakly informative Normal priors on fixed effects; Half-Cauchy on variance components  
+   - Implementation: `brms`, `rstanarm`, or `cmdstanr`
+
+2. **Posterior Summaries & Prediction**  
+   - Extract posterior means, intervals, and predictive distributions for each county  
+   - Summarize uncertainty and compare across states
+
+3. **Clustering and Pattern Discovery**  
+   - Apply frequentist clustering (e.g., `kmeans`, `mclust`) to posterior summaries  
+   - Identify latent spatial or demographic clusters  
+   - Visualize spatial risk groups across the U.S.
+
+4. **Diagnostics and Validation**  
+   - Trace plots, R-hat values, effective sample sizes  
+   - Posterior predictive checks and leave-one-out cross-validation (LOO-CV)
+
+---
+
 
 ## Structure
 
@@ -26,8 +71,8 @@ bayesproject-MaZhuFeng-FA25/
 │
 ├── data/
 │   └── raw/               # Immutable input datasets
-│       ├── yrbs2019.csv
-│       └── yrbs2021.csv
+│       ├── DataGuide.xlsx # Variable Guide
+│       ├── RAWDATA.md.    # Instructions on how to download the data
 │
 ├── docs/                  # Documentation and team coordination
 │   ├── CHANGELOG.md       # Project updates and version history
