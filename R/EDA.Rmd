@@ -1,76 +1,191 @@
-Project Idea: Bayesian Hierarchal Clustering Model pre-COVID vs post-COVID
+---
+title: "SEER Exploratory Analysis"
+author: "Jonathan Ma"
+date: "`r Sys.Date()`"
+output: word_document
+---
 
-Loading data from both years, find common questions, add a year indicator
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(ggthemes)
+library(scales)
+```
+Project Idea: Bayesian Hierarchal Model > Posterior Summary > Clustering. 
+
+Data: SEER with three levels. 
+
+- National: None (implicit aggregation by grouping across all STATE). 
+
+- State: STATE (e.g., "AK", "NY") Standard 2-letter FIPS state code. 
+
+- County: AREA (e.g., "AK: Aleutians East Borough (02013)"). 
+
+Possible variables to use:
+
+- AGE_ADJUSTED_RATE: Outcome (continuous response variable). 
+
+- STATE, AREA: Hierarchical grouping variables. 
+
+- SEX, RACE: Optional covariates (if categorical effects are desired). 
+
+- SITE: Potential subgrouping or filtering (e.g., focus on one cancer type). 
+
+- EVENT_TYPE: Incidence vs Mortality – choose one or model both. 
+
+- YEAR: Could be used to subset periods (e.g., only 2018–2022). 
+
+- POPULATION, COUNT: Possibly helpful for scaling or inference weights. 
+
+Possible Model Structure: $\text{AGE_ADJUSTED_RATE}_{ijk} \sim \mathcal{N}(\mu_{ijk}, \sigma^2)$. 
+
+Formulation: $\mu_{ijk} = \alpha + u_i + v_{ij}$. 
+
+- i: State
+
+- j: County within state
+
+- k: Cancer site or demographic stratum (if used)
+
+Priors:
+- $u_i \sim \mathcal{N}(0, \tau_{\text{state}}^2)$
+- $v_{ij} \sim \mathcal{N}(0, \tau_{\text{county}}^2)$
 
 ```{r Data Loading}
-library(tidyverse)
-library(readr)
-library(forcats)
-library(ggplot2)
-library(janitor)
-
-yrbs19 <- read_csv("../data/raw/yrbs2019.csv") %>% clean_names() %>% mutate(year = 2019)
-yrbs21 <- read_csv("../data/raw/yrbs2021.csv") %>% clean_names() %>% mutate(year = 2021)
-
-# List of variables to keep
-vars_to_keep <- c(
-  "q1", "q2", "q3", "q4", # Grouping
-  "q30", "q31", "q32", "q33", "q34", "q35", "q36", "q37", # substance use
-  "q60", "q76", #sleep and screentime
-  "q77", "q78", "q79", #bullying/school safety
-  "q80", "q81", "q82", "q83", "q84"         # Mental health
-)
-
-# Select only matching variables
-yrbs19_selected <- yrbs19 %>% select(all_of(vars_to_keep), year)
-yrbs21_selected <- yrbs21 %>% select(all_of(vars_to_keep), year)
-
-# Combine
-yrbs_combined <- bind_rows(yrbs19_selected, yrbs21_selected)
+seer <- read.delim("../data/raw/seer_data.txt", sep = "|", header = TRUE, stringsAsFactors = FALSE)
 ```
 
-We selected these variables to begin with:
-
-- Q30–Q37: Substance use
-- Q60, Q76: Sleep and screen
-- Q77–Q79: Bullying / school safety
-- Q80–Q84: Mental health
-- Q1–Q4: Use as hierarchical grouping variables
-
-compute % of complete cases
-
-```{r Checking Integrity}
-complete_pct <- mean(complete.cases(yrbs_combined)) * 100
-cat(sprintf("Percentage of rows without any NA: %.2f%%\n", complete_pct))
+```{r Inspection}
+seer[seer == "~"] <- NA
+seer$AGE_ADJUSTED_RATE <- as.numeric(seer$AGE_ADJUSTED_RATE)
+seer$POPULATION <- as.numeric(seer$POPULATION)
+seer$COUNT <- as.numeric(seer$COUNT)
 ```
 
-We have 45% of cases complete, with 13677 observations in 2019 and 17232 observations in 2021. Now I will filter complete cases only, and balance 2021 to match 2019 via a naive approach since we don't have information to "match" observations. REMARK: in processing write about information loss due to this naive approach. 
+Since a lot of rows contain missing values (NA in AGE_ADJUSTED_RATE, COUNT), and the data is mixed by EVENT_TYPE (Incidence vs Mortality), filter down to a workable subset.
 
-```{r Balancing}
-# Keep complete cases only
-yrbs_complete <- yrbs_combined %>%
-  filter(complete.cases(.))
-
-# Check counts by year
-table(yrbs_complete$year)
-
-# Downsample 2021 to match 2019's count
-n_2019 <- yrbs_complete %>% filter(year == 2019) %>% nrow()
-
-yrbs_balanced <- yrbs_complete %>%
-  group_by(year) %>%
-  slice_sample(n = min(n_2019)) %>%
-  ungroup()
-
-# Step 4: Confirm new balance
-table(yrbs_balanced$year)
-
-dim(yrbs_balanced)
+```{r Cleaning}
+seer_clean <- seer %>%
+  filter(!is.na(AGE_ADJUSTED_RATE), !is.na(COUNT)) %>%
+  filter(EVENT_TYPE %in% c("Incidence", "Mortality"))
 ```
 
-On this analysis, we have 23 variables with 13714 observations. 
+We want to define three levels: county, state, national.
 
-*TODO* : We can take one of two approaches
+```{r Hierarhy}
+seer_clean <- seer_clean %>%
+  mutate(
+    COUNTY_FIPS = str_extract(AREA, "\\((\\d+)\\)") %>% str_remove_all("\\(|\\)") %>% as.numeric()
+  )
 
-- Conduct PCA to choose relevant variables
-- Feature Engineer via grouping mental health variables, etc.
+# Check nested grouping
+seer_clean %>%
+  group_by(STATE) %>%
+  summarise(n_counties = n_distinct(COUNTY_FIPS)) %>%
+  arrange(desc(n_counties))
+```
+
+The states are now nested properly, with most counties counting down.
+
+I'm filtering by greatest proportion, we can adjust these later.
+
+```{r Filtering}
+seer_filtered <- seer_clean %>%
+  filter(
+    STATE %in% c("TX", "GA", "VA"),                  # Pick top states with many counties (we can adjust)
+    SEX == "Male and Female",                        # All sexes considered
+    RACE == "All Races",                             # All races considered
+    SITE == "All Cancer Sites Combined",             # all sites
+    EVENT_TYPE == "Incidence",                       # choose one or the other
+    !is.na(COUNT),                                   # remove suppressed data
+    !is.na(AGE_ADJUSTED_RATE)                        # required for modeling
+  )
+```
+
+Converting year ranges to numeric, we can make a factor if we decide to group by year. I also standardixed it so it helps with convergence
+
+```{r Clean and Transform}
+seer_filtered <- seer_filtered %>%
+  mutate(YEAR_MID = as.numeric(substr(YEAR, 1, 4)) + 2)
+
+# scale and center the rate, it looks approximately symmetric
+seer_filtered <- seer_filtered %>%
+  mutate(RATE_SCALED = scale(AGE_ADJUSTED_RATE))
+```
+
+For multilevel modeling structure: (1 | STATE / COUNTY). I will grab the Region by looking at the COUNTY_FIPS code
+
+```{r Grouping}
+seer_filtered <- seer_filtered %>%
+  mutate(
+    COUNTY_ID = as.factor(AREA),
+    STATE_ID = as.factor(STATE),
+    REGION_ID = paste0(STATE_ID, "_", substr(as.character(COUNTY_FIPS), 3, 3)) %>% as.factor()
+  )
+str(seer_filtered)
+```
+
+After processing, we have 543 observations across 18 variables. 
+
+The three proposed levels are County w/543 levels, State w/ 3 levels, and Region w/ 17 levels.
+
+RATE_SCALED is normalized AGE_ADJUSTED_RATE, which is a potential target variable.
+
+Here are some visualizations we can use for HW6:
+
+```{r Histogram of Cancer}
+ggplot(seer_filtered, aes(x = AGE_ADJUSTED_RATE)) +
+  geom_histogram(fill = "#4682B4", bins = 30, color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Age-Adjusted Cancer Rates",
+    x = "Age-Adjusted Rate per 100,000",
+    y = "Count"
+  )
+```
+
+```{r Boxplot of Cancer}
+ggplot(seer_filtered, aes(x = STATE_ID, y = AGE_ADJUSTED_RATE, fill = STATE_ID)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    title = "Cancer Rate Variation by State",
+    x = "State",
+    y = "Age-Adjusted Rate"
+  ) +
+  theme(legend.position = "none")
+```
+
+```{r Regions}
+ggplot(seer_filtered, aes(x = REGION_ID, y = AGE_ADJUSTED_RATE, fill = STATE_ID)) +
+  geom_boxplot(outlier.shape = NA) +
+  theme_minimal() +
+  labs(
+    title = "Cancer Rate Variation by Region",
+    x = "Region",
+    y = "Age-Adjusted Rate"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r CI via Population}
+seer_filtered <- seer_filtered %>%
+  mutate(
+    CI_LOWER = as.numeric(AGE_ADJUSTED_CI_LOWER),
+    CI_UPPER = as.numeric(AGE_ADJUSTED_CI_UPPER),
+    CI_WIDTH = CI_UPPER - CI_LOWER
+  )
+
+ggplot(seer_filtered, aes(x = POPULATION, y = CI_WIDTH, color = STATE_ID)) +
+  geom_point(alpha = 0.6) +
+  scale_x_log10(labels = comma) +
+  theme_minimal() +
+  labs(
+    title = "CI Width vs Population",
+    x = "Population (log scale)",
+    y = "Confidence Interval Width"
+  )
+```
