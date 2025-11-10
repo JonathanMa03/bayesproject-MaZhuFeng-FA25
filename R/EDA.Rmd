@@ -16,6 +16,7 @@ library(stringr)
 library(ggthemes)
 library(scales)
 ```
+
 Project Idea: Bayesian Hierarchal Model > Posterior Summary > Clustering. 
 
 Data: Breast Cancer Data from SEER. 
@@ -201,6 +202,18 @@ seer_prime <- seer_prime %>%
   )
 ```
 
+Setting factor and checking data structure. 
+
+```{r Data Structure set}
+seer_prime <- seer_prime %>%
+  mutate(
+    AGE = factor(AGE),
+    SEX = factor(SEX),
+    RACETH = factor(RACETH),
+    YEAR = factor(YEAR),
+  )
+```
+
 Inspect the data:
 
 ```{r Inspection}
@@ -213,5 +226,90 @@ Code here so you can save it as CSV: 131782 observations of 14 variables
 write.csv(seer_prime, "../data/cleaned/seer_v1.csv", row.names = FALSE)
 ```
 
+*Further Processing (if needed)*
 
+To treat SITE and MBind
 
+*Visualizations*
+
+Bar Plot of STAGE and Region
+
+```{r Visualization}
+ggplot(seer_prime, aes(x = REGION, fill = STAGE)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Cancer Stage Distribution by Region",
+    x = "Region Type",
+    y = "Number of Cases",
+    fill = "Stage"
+  ) +
+  theme_minimal()
+```
+
+Box Plot for SIZE vs GRADE 
+
+```{r}
+ggplot(seer_prime, aes(x = GRADE, y = SIZE)) +
+  geom_boxplot(fill = "#9ecae1") +
+  labs(
+    title = "Tumor Size by Grade",
+    x = "Tumor Grade",
+    y = "Tumor Size (mm)"
+  ) +
+  theme_minimal()
+```
+
+Box Plot for SIZE vs STAGE
+
+```{r}
+ggplot(seer_prime, aes(x = STAGE, y = SIZE)) +
+  geom_boxplot(fill = "#a1d99b") +
+  labs(
+    title = "Tumor Size by Cancer Stage",
+    x = "Cancer Stage",
+    y = "Tumor Size (mm)"
+  ) +
+  theme_minimal()
+```
+
+Heatmap for REGION x STAGE
+
+```{r}
+seer_prime %>%
+  count(REGION, STAGE) %>%
+  ggplot(aes(x = REGION, y = STAGE, fill = n)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
+  labs(
+    title = "Heatmap of Region × Cancer Stage Counts",
+    x = "Region",
+    y = "Cancer Stage",
+    fill = "Count"
+  ) +
+  theme_minimal()
+```
+
+Mean Tumor Size per Region
+
+```{r}
+seer_prime %>%
+  group_by(REGION) %>%
+  summarise(mean_size = mean(SIZE, na.rm = TRUE)) %>%
+  ggplot(aes(x = reorder(REGION, mean_size), y = mean_size)) +
+  geom_col(fill = "#6baed6") +
+  coord_flip() +
+  labs(
+    title = "Average Tumor Size by Region",
+    x = "Region",
+    y = "Mean Tumor Size (mm)"
+  ) +
+  theme_minimal()
+```
+
+*Summary*:
+
+We can see some issues from these plots:  
+
+- For REGION we only have three levels: Metro>1m, Metro <250k, and Nonmetro. We can maybe make this into a binary variable for Urban/Rural since we don't have that many levels
+
+- For GRADE, we only have Grade 1 and 4, no 2 or 3 data
