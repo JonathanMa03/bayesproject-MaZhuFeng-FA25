@@ -1,4 +1,4 @@
-# Bayesian Hierarchical Modeling and Clustering of Cancer Incidence and Mortality Patterns Across U.S. Counties
+# Bayesian Hierarchical Modeling of Tumor Characteristics from SEER Individual-Level Cancer Data
 
 This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2025)** at Johns Hopkins University.
 
@@ -9,50 +9,53 @@ This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2
 
 ## Project Overview
 
-The goal of this project is to develop a **Bayesian hierarchical modeling framework** to understand geographic and demographic variation in cancer incidence and mortality across U.S. counties. Using publicly available data from the **U.S. Cancer Statistics (USCS)** database, the project aims to:
+The goal of this project is to build a **Bayesian hierarchical model** to investigate how tumor severity indicators (e.g., stage, grade, size) vary by **patient-level** and **region-level** characteristics. Using **individual-level cancer records** from the **SEER Public Use Research Database**, the project focuses on:
 
-- **Model** age-adjusted cancer incidence and mortality rates across counties and states.
-- **Account** for multi-level structure (county ⟶ state ⟶ national) using Bayesian hierarchical modeling.
-- **Estimate** uncertainty and posterior distributions of incidence and mortality rates with full Bayesian inference.
-- **Cluster** posterior summaries to identify latent regional or demographic patterns in cancer risk and outcomes.
-- **Evaluate** convergence and goodness-of-fit through posterior predictive checks and MCMC diagnostics.
+- **Characterizing tumors** by stage, grade, and size across diverse patient demographics  
+- **Quantifying variation** across patients and geographic regions using multilevel models  
+- **Estimating uncertainty** in severity indicators via full Bayesian inference  
+- **Clustering patients or regions** based on posterior summaries to identify latent risk structures  
+- **Validating** model fit through posterior predictive checks and MCMC diagnostics 
 
 ---
 
 ## Data Source
 
-**Dataset:** [U.S. Cancer Statistics Public Use Database (1999–2022)](https://www.cdc.gov/united-states-cancer-statistics/dataviz/data-tables.html)  
-**Direct Data Download:** [USCS ASCII Data (Nov 2023)](https://www.cdc.gov/cancer/uscs/USCS-1999-2022-ASCII.zip)  
-**Dictionary:** `Data Dictionary USCS ASCII Nov_2023 submission.xlsx`
+**Dataset:** SEER Breast Cancer Dataset for 2016-2017, obtained by SEER*Stat  
+**Direct Data Download:** [SEER Breast Cancer)](https://drive.google.com/file/d/1oiOPLsV4RNocBZy8q_eOPFsdZhK2MGMd/view?usp=sharing)  
 
-The dataset contains state- and county-level age-adjusted cancer incidence and mortality rates, stratified by sex, race, site, and event type. These data support a natural **three-level hierarchical structure**:
 
-1. **Level 1 – County:** Observations of incidence/mortality rates, counts, and populations  
-2. **Level 2 – State:** Geographic grouping variable  
-3. **Level 3 – National:** Aggregate U.S. level (implicit hyperprior pooling)
+Each row in the dataset represents an individual tumor with variables on tumor severity, treatment, patient demographics, and region classification. These support a **three-level hierarchy**:
+
+1. **Level 1 – Tumor:** Stage, grade, surgical treatment, tumor size  
+2. **Level 2 – Patient:** Sex, race/ethnicity, age group, marital status  
+3. **Level 3 – Region:** Urban vs. rural location categories (metropolitan, non-metro, etc.)
 
 ---
 
 ## 🔍 Methodology
 
-1. **Bayesian Hierarchical Modeling**  
-   - Outcome: Age-adjusted incidence or mortality rate  
-   - Levels: County (random effects), nested within State  
-   - Priors: Weakly informative Normal priors on fixed effects; Half-Cauchy on variance components  
-   - Implementation: `brms`, `rstanarm`, or `cmdstanr`
+### 1. Bayesian Hierarchical Modeling
 
-2. **Posterior Summaries & Prediction**  
-   - Extract posterior means, intervals, and predictive distributions for each county  
-   - Summarize uncertainty and compare across states
+- **Outcome:** Tumor stage, grade, or size (modeled separately or jointly)  
+- **Levels:** Tumor (observed), nested within Patient ID, nested within Region  
+- **Priors:** Weakly informative Normal and Half-Cauchy priors for regression and variance terms  
+- **Software:** `brms` (via Stan), with option to export to JAGS
 
-3. **Clustering and Pattern Discovery**  
-   - Apply frequentist clustering (e.g., `kmeans`, `mclust`) to posterior summaries  
-   - Identify latent spatial or demographic clusters  
-   - Visualize spatial risk groups across the U.S.
+### 2. Posterior Inference & Prediction
 
-4. **Diagnostics and Validation**  
-   - Trace plots, R-hat values, effective sample sizes  
-   - Posterior predictive checks and leave-one-out cross-validation (LOO-CV)
+- Extract posterior distributions of severity indicators  
+- Compare across race, sex, marital status, and regional types  
+
+### 3. Latent Structure Discovery
+
+- Cluster patients or regions based on posterior means or medians  
+- Identify demographic or geographic segments with higher predicted severity  
+
+### 4. Diagnostics and Model Validation
+
+- Assess convergence (R-hat, ESS), trace plots, and posterior predictive checks  
+- Cross-validation via LOO or WAIC for model comparison  
 
 ---
 
@@ -71,8 +74,9 @@ bayesproject-MaZhuFeng-FA25/
 │
 ├── data/
 │   └── raw/               # Immutable input datasets
-│       ├── DataGuide.xlsx # Variable Guide
 │       ├── RAWDATA.md.    # Instructions on how to download the data
+│   └── cleaned/           # Versions of cleaned data
+│       ├── seer_v1.csv    # cleaned data subset
 │
 ├── docs/                  # Documentation and team coordination
 │   ├── CHANGELOG.md       # Project updates and version history

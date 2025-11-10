@@ -1,5 +1,5 @@
 ---
-title: "SEER Exploratory Analysis"
+title: "Breast Exploratory Analysis"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output: word_document
@@ -16,176 +16,188 @@ library(scales)
 ```
 Project Idea: Bayesian Hierarchal Model > Posterior Summary > Clustering. 
 
-Data: SEER with three levels. 
+Data: Breast Cancer Data from SEER. 
 
-- National: None (implicit aggregation by grouping across all STATE). 
+Level via Tumor, Patient, and Region (Urban/Rural Code). 
 
-- State: STATE (e.g., "AK", "NY") Standard 2-letter FIPS state code. 
+We start with 5149008 observations of 12 variables (V#). 
 
-- County: AREA (e.g., "AK: Aleutians East Borough (02013)"). 
+*Level 1: Tumor*
+V3: SEER stage (Localized, Regional, Distant). == STAGE
+V7: Tumor Grade (Grade 1-4 or unknown). == GRADE
+V10: EOD Tumor Size (1988+) == SIZE
+V8: RX Summ—Surg Prim Site (Histology). == SITE
+V9: Malignant/Benign indicator. == MBind
 
-Possible variables to use:
+Remark: No Behavior Variable
 
-- AGE_ADJUSTED_RATE: Outcome (continuous response variable). 
+*Level 2: Patient*
+V1: Patient ID. == ID
+V4: Binned Age group at diagnosis. == AGE
+V5: Patient Sex. == SEX
+V6: Race/Ethnicity. == RACETH
+V11: Year of Diagnosis. == YEAR
+V12: Marital Status. == MARRY
 
-- STATE, AREA: Hierarchical grouping variables. 
+Remark: No Primary site variable
 
-- SEX, RACE: Optional covariates (if categorical effects are desired). 
+*Level 3: Region*
+V2: Regional Area (Metro < 250k, Metro < 1m, Metro > 1m, Nonmetro adjacent, nonmetro nonadjacent, unknown). == REGION
 
-- SITE: Potential subgrouping or filtering (e.g., focus on one cancer type). 
-
-- EVENT_TYPE: Incidence vs Mortality – choose one or model both. 
-
-- YEAR: Could be used to subset periods (e.g., only 2018–2022). 
-
-- POPULATION, COUNT: Possibly helpful for scaling or inference weights. 
-
-Possible Model Structure: $\text{AGE_ADJUSTED_RATE}_{ijk} \sim \mathcal{N}(\mu_{ijk}, \sigma^2)$. 
-
-Formulation: $\mu_{ijk} = \alpha + u_i + v_{ij}$. 
-
-- i: State
-
-- j: County within state
-
-- k: Cancer site or demographic stratum (if used)
-
-Priors:
-- $u_i \sim \mathcal{N}(0, \tau_{\text{state}}^2)$
-- $v_{ij} \sim \mathcal{N}(0, \tau_{\text{county}}^2)$
 
 ```{r Data Loading}
-seer <- read.delim("../data/raw/seer_data.txt", sep = "|", header = TRUE, stringsAsFactors = FALSE)
+seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
 ```
+
+```{r Rename and NA drop}
+# Rename and select the relevant variables
+seer_prime <- seer %>%
+  transmute(
+    ID     = V1,
+    REGION = V2,
+    STAGE  = V3,
+    AGE    = V4,
+    SEX    = V5,
+    RACETH = V6,
+    GRADE  = V7,
+    SITE   = V8,
+    MBind  = V9,
+    SIZE   = V10,
+    YEAR   = V11,
+    MARRY  = V12
+  )
+
+# Replace "Unknown" and "Blank(s)" with NA in character columns
+seer_prime <- seer_prime %>%
+  mutate(across(where(is.character), ~na_if(., "Unknown"))) %>%
+  mutate(across(where(is.character), ~na_if(., "Blank(s)")))
+
+# Filter for complete cases only
+seer_prime <- seer_prime %>%
+  filter(complete.cases(.))
+
+# Print number and percentage of complete cases
+total_cases <- nrow(seer)
+complete_cases <- nrow(seer_prime)
+percent_complete <- round(100 * complete_cases / total_cases, 2)
+
+cat("Complete cases:", complete_cases, "out of", total_cases,
+    sprintf("(%s%% complete)\n", percent_complete))
+```
+
+we have 209123 cases to work with (4.06% of the whole thing) after removing "Unknown" and "Blank(s)" Values.
+
+Further cleaning is done via tabling all variables.
+
+REGION: collapse and recode into ordered, interpretable regional factors, removes the Alaska/Hawaii “unknown” entries.
+
+```{r REGION}
+seer_prime <- seer_prime %>%
+  mutate(
+    REGION = case_when(
+      str_detect(REGION, "1 million") ~ "Metro >1M",
+      str_detect(REGION, "250,000") ~ "Metro 250k–1M",
+      str_detect(REGION, "lt 250") ~ "Metro <250k",
+      str_detect(REGION, "adjacent") ~ "Nonmetro Adjacent",
+      str_detect(REGION, "not adjacent") ~ "Nonmetro Nonadjacent",
+      TRUE ~ NA_character_
+    ),
+    REGION = factor(REGION,
+                    levels = c("Metro >1M", "Metro 250k–1M", "Metro <250k",
+                               "Nonmetro Adjacent", "Nonmetro Nonadjacent"))
+  )
+```
+
+STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
+
+```{r STAGE}
+seer_prime <- seer_prime %>%
+  mutate(
+    STAGE = case_when(
+      STAGE %in% c("Localized", "Regional", "Distant") ~ STAGE,
+      TRUE ~ NA_character_
+    ),
+    STAGE = factor(STAGE, levels = c("Localized", "Regional", "Distant"))
+  )
+```
+
+GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.).
+
+```{r GRADE}
+seer_prime <- seer_prime %>%
+  mutate(
+    GRADE = case_when(
+      str_detect(GRADE, "I$") ~ "1",
+      str_detect(GRADE, "II$") ~ "2",
+      str_detect(GRADE, "III$") ~ "3",
+      str_detect(GRADE, "IV$") ~ "4",
+      TRUE ~ NA_character_
+    ),
+    GRADE = factor(GRADE, levels = c("1", "2", "3", "4"), ordered = TRUE)
+  )
+```
+
+SITE: appears to be the histology variable, and breast cancer is "050". Issue: only 4000 are breast cancer, the majority are 998/999 which are unknown. I will not treat this variable for now
+
+MBind: Leaving untreated as well, because I'm not sure how to deal with this:
+
+```{r MBind}
+table(seer_prime$MBind)
+```
+
+SIZE: Making this numeric and then filtering implausible values, we can bin these ("≤20mm", "21–50mm", "51–100mm", ">100mm") if needed. 
+
+```{r SIZE}
+seer_prime <- seer_prime %>%
+  mutate(
+    SIZE = as.numeric(SIZE),
+    SIZE = ifelse(SIZE > 0 & SIZE <= 200, SIZE, NA)
+  )
+```
+
+MARRY: Making this binary, only married or unmarried. 
+
+```{r MARRY}
+seer_prime <- seer_prime %>%
+  mutate(
+    MARRY = case_when(
+      str_detect(MARRY, "Married") ~ "Married",
+      TRUE ~ "Unmarried"
+    ),
+    MARRY = factor(MARRY)
+  )
+```
+
+Seeing how many cases are available now:
+
+```{r Checking}
+seer_prime <- seer_prime %>% filter(complete.cases(ID, REGION, STAGE, AGE, SEX, RACETH, GRADE, SITE, MBind, SIZE, YEAR, MARRY))
+cat("Remaining complete cases:", nrow(seer_prime), "\n")
+```
+
+*Hierarchal Encoding*
+
+To do hierarchal models in R, identifiers must be encoded as numeric integers (e.g., 1, 2, ..., N) for levels like REGION and ID.
+
+```{r Hierarchy prep}
+seer_prime <- seer_prime %>%
+  mutate(
+    REGION_ID = as.integer(factor(REGION)),
+    PATIENT_ID = as.integer(factor(ID))
+  )
+```
+
+Inspect the data:
 
 ```{r Inspection}
-seer[seer == "~"] <- NA
-seer$AGE_ADJUSTED_RATE <- as.numeric(seer$AGE_ADJUSTED_RATE)
-seer$POPULATION <- as.numeric(seer$POPULATION)
-seer$COUNT <- as.numeric(seer$COUNT)
+str(seer_prime)
 ```
 
-Since a lot of rows contain missing values (NA in AGE_ADJUSTED_RATE, COUNT), and the data is mixed by EVENT_TYPE (Incidence vs Mortality), filter down to a workable subset.
+Code here so you can save it as CSV: 131782 observations of 14 variables
 
-```{r Cleaning}
-seer_clean <- seer %>%
-  filter(!is.na(AGE_ADJUSTED_RATE), !is.na(COUNT)) %>%
-  filter(EVENT_TYPE %in% c("Incidence", "Mortality"))
+```{r SAVING}
+write.csv(seer_prime, "../data/cleaned/seer_v1.csv", row.names = FALSE)
 ```
 
-We want to define three levels: county, state, national.
 
-```{r Hierarhy}
-seer_clean <- seer_clean %>%
-  mutate(
-    COUNTY_FIPS = str_extract(AREA, "\\((\\d+)\\)") %>% str_remove_all("\\(|\\)") %>% as.numeric()
-  )
 
-# Check nested grouping
-seer_clean %>%
-  group_by(STATE) %>%
-  summarise(n_counties = n_distinct(COUNTY_FIPS)) %>%
-  arrange(desc(n_counties))
-```
-
-The states are now nested properly, with most counties counting down.
-
-I'm filtering by greatest proportion, we can adjust these later.
-
-```{r Filtering}
-seer_filtered <- seer_clean %>%
-  filter(
-    STATE %in% c("TX", "GA", "VA"),                  # Pick top states with many counties (we can adjust)
-    SEX == "Male and Female",                        # All sexes considered
-    RACE == "All Races",                             # All races considered
-    SITE == "All Cancer Sites Combined",             # all sites
-    EVENT_TYPE == "Incidence",                       # choose one or the other
-    !is.na(COUNT),                                   # remove suppressed data
-    !is.na(AGE_ADJUSTED_RATE)                        # required for modeling
-  )
-```
-
-Converting year ranges to numeric, we can make a factor if we decide to group by year. I also standardixed it so it helps with convergence
-
-```{r Clean and Transform}
-seer_filtered <- seer_filtered %>%
-  mutate(YEAR_MID = as.numeric(substr(YEAR, 1, 4)) + 2)
-
-# scale and center the rate, it looks approximately symmetric
-seer_filtered <- seer_filtered %>%
-  mutate(RATE_SCALED = scale(AGE_ADJUSTED_RATE))
-```
-
-For multilevel modeling structure: (1 | STATE / COUNTY). I will grab the Region by looking at the COUNTY_FIPS code
-
-```{r Grouping}
-seer_filtered <- seer_filtered %>%
-  mutate(
-    COUNTY_ID = as.factor(AREA),
-    STATE_ID = as.factor(STATE),
-    REGION_ID = paste0(STATE_ID, "_", substr(as.character(COUNTY_FIPS), 3, 3)) %>% as.factor()
-  )
-str(seer_filtered)
-```
-
-After processing, we have 543 observations across 18 variables. 
-
-The three proposed levels are County w/543 levels, State w/ 3 levels, and Region w/ 17 levels.
-
-RATE_SCALED is normalized AGE_ADJUSTED_RATE, which is a potential target variable.
-
-Here are some visualizations we can use for HW6:
-
-```{r Histogram of Cancer}
-ggplot(seer_filtered, aes(x = AGE_ADJUSTED_RATE)) +
-  geom_histogram(fill = "#4682B4", bins = 30, color = "white") +
-  theme_minimal() +
-  labs(
-    title = "Distribution of Age-Adjusted Cancer Rates",
-    x = "Age-Adjusted Rate per 100,000",
-    y = "Count"
-  )
-```
-
-```{r Boxplot of Cancer}
-ggplot(seer_filtered, aes(x = STATE_ID, y = AGE_ADJUSTED_RATE, fill = STATE_ID)) +
-  geom_boxplot() +
-  theme_minimal() +
-  labs(
-    title = "Cancer Rate Variation by State",
-    x = "State",
-    y = "Age-Adjusted Rate"
-  ) +
-  theme(legend.position = "none")
-```
-
-```{r Regions}
-ggplot(seer_filtered, aes(x = REGION_ID, y = AGE_ADJUSTED_RATE, fill = STATE_ID)) +
-  geom_boxplot(outlier.shape = NA) +
-  theme_minimal() +
-  labs(
-    title = "Cancer Rate Variation by Region",
-    x = "Region",
-    y = "Age-Adjusted Rate"
-  ) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-```{r CI via Population}
-seer_filtered <- seer_filtered %>%
-  mutate(
-    CI_LOWER = as.numeric(AGE_ADJUSTED_CI_LOWER),
-    CI_UPPER = as.numeric(AGE_ADJUSTED_CI_UPPER),
-    CI_WIDTH = CI_UPPER - CI_LOWER
-  )
-
-ggplot(seer_filtered, aes(x = POPULATION, y = CI_WIDTH, color = STATE_ID)) +
-  geom_point(alpha = 0.6) +
-  scale_x_log10(labels = comma) +
-  theme_minimal() +
-  labs(
-    title = "CI Width vs Population",
-    x = "Population (log scale)",
-    y = "Confidence Interval Width"
-  )
-```
