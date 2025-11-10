@@ -21,8 +21,8 @@ The goal of this project is to build a **Bayesian hierarchical model** to invest
 
 ## Data Source
 
-**Dataset:** SEER Breast Cancer Dataset for 2016-2017, obtained by SEER*Stat  
-**Direct Data Download:** [SEER Breast Cancer)](https://drive.google.com/file/d/1oiOPLsV4RNocBZy8q_eOPFsdZhK2MGMd/view?usp=sharing)  
+**Dataset:** SEER Breast Cancer Dataset for 2016-2017, obtained by [SEER*Stat](https://seer.cancer.gov/)  
+**Direct Data Download:** [SEER Breast Cancer](https://drive.google.com/file/d/1oiOPLsV4RNocBZy8q_eOPFsdZhK2MGMd/view?usp=sharing)  
 
 
 Each row in the dataset represents an individual tumor with variables on tumor severity, treatment, patient demographics, and region classification. These support a **three-level hierarchy**:

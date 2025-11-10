@@ -2,7 +2,9 @@
 title: "Breast Exploratory Analysis"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
-output: word_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -23,25 +25,37 @@ Level via Tumor, Patient, and Region (Urban/Rural Code).
 We start with 5149008 observations of 12 variables (V#). 
 
 *Level 1: Tumor*
+
 V3: SEER stage (Localized, Regional, Distant). == STAGE
+
 V7: Tumor Grade (Grade 1-4 or unknown). == GRADE
+
 V10: EOD Tumor Size (1988+) == SIZE
+
 V8: RX Summ—Surg Prim Site (Histology). == SITE
+
 V9: Malignant/Benign indicator. == MBind
 
 Remark: No Behavior Variable
 
 *Level 2: Patient*
+
 V1: Patient ID. == ID
+
 V4: Binned Age group at diagnosis. == AGE
+
 V5: Patient Sex. == SEX
+
 V6: Race/Ethnicity. == RACETH
+
 V11: Year of Diagnosis. == YEAR
+
 V12: Marital Status. == MARRY
 
 Remark: No Primary site variable
 
 *Level 3: Region*
+
 V2: Regional Area (Metro < 250k, Metro < 1m, Metro > 1m, Nonmetro adjacent, nonmetro nonadjacent, unknown). == REGION
 
 
