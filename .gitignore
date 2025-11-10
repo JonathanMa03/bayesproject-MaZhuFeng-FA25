@@ -52,4 +52,3 @@ rsconnect/
 
 # Ignore large or local data
 data/raw/breastcancer.txt
-data/cleaned/seer_v1.csv
