@@ -51,4 +51,4 @@ po/*~
 rsconnect/
 
 # Ignore large or local data
-data/raw/seer_data.txt
+data/raw/breastcancer.txt
