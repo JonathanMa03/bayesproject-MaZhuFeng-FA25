@@ -3,6 +3,7 @@ title: "Breast Exploratory Analysis"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
+  word_document: default
   html_document:
     df_print: paged
 ---
