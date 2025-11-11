@@ -1,4 +1,4 @@
-# Bayesian Hierarchical Modeling and Clustering of Malignant Cancer Diagnoses
+# Bayesian Hierarchical Modeling and Clustering of Malignant Cancer Diagnoses 
 
 This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2025)** at Johns Hopkins University.
 

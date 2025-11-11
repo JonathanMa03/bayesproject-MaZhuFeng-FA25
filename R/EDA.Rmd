@@ -302,5 +302,5 @@ seer_prime %>%
 
 *Summary*:
 
-We can see some issues from these plots, Large metro areas diagnose more cancers and tend to catch them earlier, as seen by the high volume of localized cases. Smaller and nonmetro regions face higher proportions of late-stage cancers, potentially due to limited access to care. Tumor size increases with stage but is less strongly associated with grade or region. The findings underscore healthcare access as a key determinant in early cancer detection.
+We can see some issues from these plots, Large metro areas diagnose more cancers and tend to catch them earlier, as seen by the high volume of localized cases. Smaller and nonmetro regions face higher proportions of late-stage cancers, potentially due to limited access to care. Tumor size increases with stage but is less strongly associated with grade or region. The findings underscore healthcare access as a key determinant in early cancer detection. 
 

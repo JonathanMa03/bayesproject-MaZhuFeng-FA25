@@ -28,7 +28,7 @@ To reproduce results or run scripts:
 
 - Do **not** commit large data files to the repository.
 - If new large datasets are added, update `.gitignore` and this README to document them.
-- For Cleaned data, RERUN the whole EDA.md file so you don't commit the large file
+- For Cleaned data, RERUN the whole EDA.md file so you don't commit the large file 
 
 ---
 
