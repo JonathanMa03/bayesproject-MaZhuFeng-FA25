@@ -10,11 +10,100 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(brms)
 ```
 
-# Tumor Model (Level 1)
+# Loading the Data In
 
-# Patient Model (Level 2)
+```{r Load and Prep}
+df <- read.csv("../data/clean/seer_nov10.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+str(df)
+```
+Reformulating for Readability
 
-# Regional Model (Level 3)
+```{r Reformat}
+seer_df <- df %>% 
+  mutate(
+    # Convert outcome: 1 = late-stage, 0 = early-stage
+    latestage = case_when(
+      STAGE %in% c("Regional", "Distant") ~ 1,
+      STAGE == "Localized" ~ 0,
+      TRUE ~ NA_real_
+    ),
+    
+    # Ensure all covariates are factor/numeric as needed
+    grade = GRADE,
+    size = SIZE,
+    age = AGE,
+    sex = SEX,
+    race = RACETH,
+    marital = MARRY,
+    year = YEAR,
+    region = REGION,
+
+    # Convert IDs to factor
+    patientid = as.factor(PATIENT_ID),
+    regionid = as.factor(REGION_ID)
+  ) %>%
+  # Drop rows with missing outcome or covariates (optional)
+  drop_na(latestage, grade, size, age, sex, race, marital, year)
+
+seer_df$latestage <- as.integer(seer_df$latestage)
+```
+
+# Model Initialization with Prior
+
+```{r Model}
+priors <- c(
+  # Fixed effects ~ Normal(0, 2^2)
+  prior(normal(0, 2), class = "b"),
+
+  # Intercept ~ Normal(0, 5^2)
+  prior(normal(0, 5), class = "Intercept"),
+
+  # Group-level SDs ~ Student-t(3, 0, 2.5) ≈ weak InvGamma
+  prior(student_t(3, 0, 2.5), class = "sd") 
+)
+
+seer_test <- seer_df[sample(1:nrow(seer_df), 2000), ] #take a small data subset
+
+# Build 3-level hierarchical model
+brm_model <- brm(
+  formula = latestage ~ grade + size + age + sex + race + marital + year +
+    (1 | patientid) + (1 | regionid),
+  data = seer_test,
+  family = bernoulli(),
+  prior=priors,
+  backend = "cmdstanr",
+  warmup = 50,
+  sample_prior = "only",  # prevents fitting to data
+  iter = 100,               # skips sampling entirely
+  chains = 4,             # markov chains
+  silent = 2,              # suppress unnecessary output
+  control = list(adapt_delta = 0.95),
+  seed = 632
+)
+```
+
+The model ran successfully. R uses a Stan backend, so if we need to document Stan code, run below:
+
+```{r STAN}
+#stancode(brm_model)
+```
+
+Checking the data passed to stan (this will print a lot of stuff):
+
+```{r}
+#standata(brm_model)
+```
+
+Prior Summary below:
+
+```{r Prior Summary}
+prior_summary(brm_model)
+```
+
+We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
+
 
