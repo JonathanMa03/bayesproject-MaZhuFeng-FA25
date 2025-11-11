@@ -286,17 +286,9 @@ seer_prime %>%
 Mean Tumor Size per Region
 
 ```{r}
-seer_prime %>%
-  group_by(REGION) %>%
-  summarise(mean_size = mean(SIZE, na.rm = TRUE)) %>%
-  ggplot(aes(x = reorder(REGION, mean_size), y = mean_size)) +
-  geom_col(fill = "#6baed6") +
-  coord_flip() +
-  labs(
-    title = "Average Tumor Size by Region",
-    x = "Region",
-    y = "Mean Tumor Size (mm)"
-  ) +
+ggplot(seer_prime, aes(x = STAGE, y = SIZE, fill = STAGE)) +
+  geom_violin(trim = FALSE) +
+  labs(title = "Tumor Size Distribution by Stage", x = "Stage", y = "Tumor Size (mm)") +
   theme_minimal()
 ```
 
