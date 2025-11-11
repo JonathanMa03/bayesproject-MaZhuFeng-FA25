@@ -34,12 +34,6 @@ V7: Tumor Grade (Grade 1-4 or unknown). == GRADE
 
 V10: EOD Tumor Size (1988+) == SIZE
 
-V8: RX Summ—Surg Prim Site (Histology). == SITE
-
-V9: Malignant/Benign indicator. == MBind
-
-Remark: No Behavior Variable
-
 *Level 2: Patient*
 
 V1: Patient ID. == ID
@@ -54,8 +48,6 @@ V11: Year of Diagnosis. == YEAR
 
 V12: Marital Status. == MARRY
 
-Remark: No Primary site variable
-
 *Level 3: Region*
 
 V2: Regional Area (Metro < 250k, Metro < 1m, Metro > 1m, Nonmetro adjacent, nonmetro nonadjacent, unknown). == REGION
@@ -66,7 +58,6 @@ seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, s
 ```
 
 ```{r Rename and NA drop}
-# Rename and select the relevant variables
 seer_prime <- seer %>%
   transmute(
     ID     = V1,
@@ -76,23 +67,18 @@ seer_prime <- seer %>%
     SEX    = V5,
     RACETH = V6,
     GRADE  = V7,
-    SITE   = V8,
-    MBind  = V9,
     SIZE   = V10,
     YEAR   = V11,
     MARRY  = V12
   )
 
-# Replace "Unknown" and "Blank(s)" with NA in character columns
 seer_prime <- seer_prime %>%
   mutate(across(where(is.character), ~na_if(., "Unknown"))) %>%
   mutate(across(where(is.character), ~na_if(., "Blank(s)")))
 
-# Filter for complete cases only
 seer_prime <- seer_prime %>%
   filter(complete.cases(.))
 
-# Print number and percentage of complete cases
 total_cases <- nrow(seer)
 complete_cases <- nrow(seer_prime)
 percent_complete <- round(100 * complete_cases / total_cases, 2)
@@ -111,17 +97,14 @@ REGION: collapse and recode into ordered, interpretable regional factors, remove
 seer_prime <- seer_prime %>%
   mutate(
     REGION = case_when(
-      str_detect(REGION, "1 million") ~ "Metro >1M",
-      str_detect(REGION, "250,000") ~ "Metro 250k–1M",
-      str_detect(REGION, "lt 250") ~ "Metro <250k",
-      str_detect(REGION, "adjacent") ~ "Nonmetro Adjacent",
-      str_detect(REGION, "not adjacent") ~ "Nonmetro Nonadjacent",
+      str_detect(REGION, "1 million") ~ "Large",
+      str_detect(REGION, "lt 250") | str_detect(REGION, "250,000") ~ "Small",
+      str_detect(REGION, "adjacent") | str_detect(REGION, "not adjacent") ~ "Nonmetro",
       TRUE ~ NA_character_
     ),
-    REGION = factor(REGION,
-                    levels = c("Metro >1M", "Metro 250k–1M", "Metro <250k",
-                               "Nonmetro Adjacent", "Nonmetro Nonadjacent"))
+    REGION = factor(REGION, levels = c("Large", "Small", "Nonmetro"))
   )
+table(seer_prime$REGION)
 ```
 
 STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
@@ -135,6 +118,7 @@ seer_prime <- seer_prime %>%
     ),
     STAGE = factor(STAGE, levels = c("Localized", "Regional", "Distant"))
   )
+table(seer_prime$STAGE)
 ```
 
 GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.).
@@ -149,16 +133,14 @@ seer_prime <- seer_prime %>%
       str_detect(GRADE, "IV$") ~ "4",
       TRUE ~ NA_character_
     ),
-    GRADE = factor(GRADE, levels = c("1", "2", "3", "4"), ordered = TRUE)
+    GRADE = case_when(
+      GRADE %in% c("1", "2") ~ "Start",
+      GRADE %in% c("3", "4") ~ "End",
+      TRUE ~ NA_character_
+    ),
+    GRADE = factor(GRADE, levels = c("Start", "End"), ordered = FALSE)
   )
-```
-
-SITE: appears to be the histology variable, and breast cancer is "050". Issue: only 4000 are breast cancer, the majority are 998/999 which are unknown. I will not treat this variable for now
-
-MBind: Leaving untreated as well, because I'm not sure how to deal with this:
-
-```{r MBind}
-table(seer_prime$MBind)
+table(seer_prime$GRADE)
 ```
 
 SIZE: Making this numeric and then filtering implausible values, we can bin these ("≤20mm", "21–50mm", "51–100mm", ">100mm") if needed. 
@@ -169,6 +151,7 @@ seer_prime <- seer_prime %>%
     SIZE = as.numeric(SIZE),
     SIZE = ifelse(SIZE > 0 & SIZE <= 200, SIZE, NA)
   )
+summary(seer_prime$SIZE)
 ```
 
 MARRY: Making this binary, only married or unmarried. 
@@ -182,12 +165,27 @@ seer_prime <- seer_prime %>%
     ),
     MARRY = factor(MARRY)
   )
+table(seer_prime$MARRY)
+```
+
+Recode RACETH to be three levels
+
+```{r RACISM}
+seer_prime <- seer_prime %>%
+  mutate(
+    RACETH = case_when(
+      RACETH == "White" ~ "W",
+      RACETH == "Black" ~ "B",
+      TRUE ~ "O"  
+    ),
+    RACETH = factor(RACETH, levels = c("W", "B", "O"))
+  )
 ```
 
 Seeing how many cases are available now:
 
 ```{r Checking}
-seer_prime <- seer_prime %>% filter(complete.cases(ID, REGION, STAGE, AGE, SEX, RACETH, GRADE, SITE, MBind, SIZE, YEAR, MARRY))
+seer_prime <- seer_prime %>% filter(complete.cases(ID, REGION, STAGE, AGE, SEX, RACETH, GRADE, SIZE, YEAR, MARRY))
 cat("Remaining complete cases:", nrow(seer_prime), "\n")
 ```
 
@@ -211,7 +209,6 @@ seer_prime <- seer_prime %>%
     AGE = factor(AGE),
     SEX = factor(SEX),
     RACETH = factor(RACETH),
-    YEAR = factor(YEAR),
   )
 ```
 
@@ -221,15 +218,11 @@ Inspect the data:
 str(seer_prime)
 ```
 
-Code here so you can save it as CSV: 131782 observations of 14 variables
+Code here so you can save it as CSV: 1238888 observations of 12 variables
 
 ```{r SAVING}
-write.csv(seer_prime, "../data/cleaned/seer_v1.csv", row.names = FALSE)
+write.csv(seer_prime, "../data/clean/seer_nov10.csv", row.names = FALSE)
 ```
-
-*Further Processing (if needed)*
-
-To treat SITE and MBind
 
 *Visualizations*
 
@@ -309,8 +302,5 @@ seer_prime %>%
 
 *Summary*:
 
-We can see some issues from these plots:  
+We can see some issues from these plots, Large metro areas diagnose more cancers and tend to catch them earlier, as seen by the high volume of localized cases. Smaller and nonmetro regions face higher proportions of late-stage cancers, potentially due to limited access to care. Tumor size increases with stage but is less strongly associated with grade or region. The findings underscore healthcare access as a key determinant in early cancer detection.
 
-- For REGION we only have three levels: Metro>1m, Metro <250k, and Nonmetro. We can maybe make this into a binary variable for Urban/Rural since we don't have that many levels
-
-- For GRADE, we only have Grade 1 and 4, no 2 or 3 data

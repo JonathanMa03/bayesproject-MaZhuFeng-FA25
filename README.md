@@ -1,4 +1,4 @@
-# Bayesian Hierarchical Modeling of Tumor Characteristics from SEER Individual-Level Cancer Data
+# Bayesian Hierarchical Modeling and Clustering of Malignant Cancer Diagnoses
 
 This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2025)** at Johns Hopkins University.
 
@@ -76,7 +76,7 @@ bayesproject-MaZhuFeng-FA25/
 │   └── raw/               # Immutable input datasets
 │       ├── RAWDATA.md.    # Instructions on how to download the data
 │   └── cleaned/           # Versions of cleaned data
-│       ├── seer_v1.csv    # cleaned data subset
+│       ├── seer_nov10.csv    # cleaned data subset
 │
 ├── docs/                  # Documentation and team coordination
 │   ├── CHANGELOG.md       # Project updates and version history
