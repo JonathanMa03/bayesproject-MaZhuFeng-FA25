@@ -34,6 +34,8 @@ V7: Tumor Grade (Grade 1-4 or unknown). == GRADE
 
 V10: EOD Tumor Size (1988+) == SIZE
 
+V8: Tumor Site (Esophageal, Lung, etc), https://seer.cancer.gov/siterecode
+
 *Level 2: Patient*
 
 V1: Patient ID. == ID
@@ -60,16 +62,17 @@ seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, s
 ```{r Rename and NA drop}
 seer_prime <- seer %>%
   transmute(
-    ID     = V1,
-    REGION = V2,
-    STAGE  = V3,
-    AGE    = V4,
-    SEX    = V5,
-    RACETH = V6,
-    GRADE  = V7,
-    SIZE   = V10,
-    YEAR   = V11,
-    MARRY  = V12
+    id     = V1,
+    region = V2,
+    stage  = V3,
+    age    = V4,
+    sex    = V5,
+    raceth = V6,
+    grade  = V7,
+    size   = V10,
+    year   = V11,
+    marry  = V12,
+    site = V8
   )
 
 seer_prime <- seer_prime %>%
@@ -89,22 +92,38 @@ cat("Complete cases:", complete_cases, "out of", total_cases,
 
 we have 209123 cases to work with (4.06% of the whole thing) after removing "Unknown" and "Blank(s)" Values.
 
-Further cleaning is done via tabling all variables.
+Further cleaning is done via tabling all variables. 
+
+We want to filter for top ten cancer sites (breast, lung, etc). We exclude 998 and 999 because they are unknown. The code is structured so we can switch sites.
+
+```{r SITE}
+seer_prime <- seer_prime %>%
+  filter(!(site %in% c("998", "999")))
+
+top_sites <- seer_prime %>%
+  count(site, sort = TRUE) %>%
+  slice_head(n = 10)
+
+seer_prime <- seer_prime %>%
+  filter(site %in% top_sites$site)
+
+table(seer_prime$site)
+```
 
 REGION: collapse and recode into ordered, interpretable regional factors, removes the Alaska/Hawaii “unknown” entries.
 
 ```{r REGION}
 seer_prime <- seer_prime %>%
   mutate(
-    REGION = case_when(
-      str_detect(REGION, "1 million") ~ "Large",
-      str_detect(REGION, "lt 250") | str_detect(REGION, "250,000") ~ "Small",
-      str_detect(REGION, "adjacent") | str_detect(REGION, "not adjacent") ~ "Nonmetro",
+    region = case_when(
+      str_detect(region, "1 million") ~ "Large",
+      str_detect(region, "lt 250") | str_detect(region, "250,000") ~ "Small",
+      str_detect(region, "adjacent") | str_detect(region, "not adjacent") ~ "Nonmetro",
       TRUE ~ NA_character_
     ),
-    REGION = factor(REGION, levels = c("Large", "Small", "Nonmetro"))
+    region = factor(region, levels = c("Large", "Small", "Nonmetro"))
   )
-table(seer_prime$REGION)
+table(seer_prime$region)
 ```
 
 STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
@@ -112,35 +131,35 @@ STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
 ```{r STAGE}
 seer_prime <- seer_prime %>%
   mutate(
-    STAGE = case_when(
-      STAGE %in% c("Localized", "Regional", "Distant") ~ STAGE,
+    stage = case_when(
+      stage %in% c("Localized", "Regional", "Distant") ~ stage,
       TRUE ~ NA_character_
     ),
-    STAGE = factor(STAGE, levels = c("Localized", "Regional", "Distant"))
+    stage = factor(stage, levels = c("Localized", "Regional", "Distant"))
   )
-table(seer_prime$STAGE)
+table(seer_prime$stage)
 ```
 
-GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.).
+GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.). Convert them to Start (1/2) and End (3/4) since our model is logistic
 
 ```{r GRADE}
 seer_prime <- seer_prime %>%
   mutate(
-    GRADE = case_when(
-      str_detect(GRADE, "I$") ~ "1",
-      str_detect(GRADE, "II$") ~ "2",
-      str_detect(GRADE, "III$") ~ "3",
-      str_detect(GRADE, "IV$") ~ "4",
+    grade = case_when(
+      str_detect(grade, "I$") ~ "1",
+      str_detect(grade, "II$") ~ "2",
+      str_detect(grade, "III$") ~ "3",
+      str_detect(grade, "IV$") ~ "4",
       TRUE ~ NA_character_
     ),
-    GRADE = case_when(
-      GRADE %in% c("1", "2") ~ "Start",
-      GRADE %in% c("3", "4") ~ "End",
+    grade = case_when(
+      grade %in% c("1", "2") ~ "Start",
+      grade %in% c("3", "4") ~ "End",
       TRUE ~ NA_character_
     ),
-    GRADE = factor(GRADE, levels = c("Start", "End"), ordered = FALSE)
+    grade = factor(grade, levels = c("Start", "End"), ordered = FALSE)
   )
-table(seer_prime$GRADE)
+table(seer_prime$grade)
 ```
 
 SIZE: Making this numeric and then filtering implausible values, we can bin these ("≤20mm", "21–50mm", "51–100mm", ">100mm") if needed. 
@@ -148,10 +167,10 @@ SIZE: Making this numeric and then filtering implausible values, we can bin thes
 ```{r SIZE}
 seer_prime <- seer_prime %>%
   mutate(
-    SIZE = as.numeric(SIZE),
-    SIZE = ifelse(SIZE > 0 & SIZE <= 200, SIZE, NA)
+    size = as.numeric(size),
+    size = ifelse(size > 0 & size <= 200, size, NA)
   )
-summary(seer_prime$SIZE)
+summary(seer_prime$size)
 ```
 
 MARRY: Making this binary, only married or unmarried. 
@@ -159,13 +178,13 @@ MARRY: Making this binary, only married or unmarried.
 ```{r MARRY}
 seer_prime <- seer_prime %>%
   mutate(
-    MARRY = case_when(
-      str_detect(MARRY, "Married") ~ "Married",
+    marry = case_when(
+      str_detect(marry, "Married") ~ "Married",
       TRUE ~ "Unmarried"
     ),
-    MARRY = factor(MARRY)
+    marry = factor(marry)
   )
-table(seer_prime$MARRY)
+table(seer_prime$marry)
 ```
 
 Recode RACETH to be three levels
@@ -173,19 +192,20 @@ Recode RACETH to be three levels
 ```{r RACISM}
 seer_prime <- seer_prime %>%
   mutate(
-    RACETH = case_when(
-      RACETH == "White" ~ "W",
-      RACETH == "Black" ~ "B",
+    raceth = case_when(
+      raceth == "White" ~ "W",
+      raceth == "Black" ~ "B",
       TRUE ~ "O"  
     ),
-    RACETH = factor(RACETH, levels = c("W", "B", "O"))
+    raceth = factor(raceth, levels = c("W", "B", "O"))
   )
+table(seer_prime$raceth)
 ```
 
 Seeing how many cases are available now:
 
 ```{r Checking}
-seer_prime <- seer_prime %>% filter(complete.cases(ID, REGION, STAGE, AGE, SEX, RACETH, GRADE, SIZE, YEAR, MARRY))
+seer_prime <- seer_prime %>% filter(complete.cases(id, region, stage, age, sex, raceth, grade, size, site, marry, year))
 cat("Remaining complete cases:", nrow(seer_prime), "\n")
 ```
 
@@ -196,8 +216,8 @@ To do hierarchal models in R, identifiers must be encoded as numeric integers (e
 ```{r Hierarchy prep}
 seer_prime <- seer_prime %>%
   mutate(
-    REGION_ID = as.integer(factor(REGION)),
-    PATIENT_ID = as.integer(factor(ID))
+    regionid = as.integer(factor(region)),
+    patientid = as.integer(factor(id))
   )
 ```
 
@@ -206,9 +226,9 @@ Setting factor and checking data structure.
 ```{r Data Structure set}
 seer_prime <- seer_prime %>%
   mutate(
-    AGE = factor(AGE),
-    SEX = factor(SEX),
-    RACETH = factor(RACETH),
+    age = factor(age),
+    sex = factor(sex),
+    raceth = factor(raceth),
   )
 ```
 
@@ -218,81 +238,8 @@ Inspect the data:
 str(seer_prime)
 ```
 
-Code here so you can save it as CSV: 1238888 observations of 12 variables
+Code here so you can save it as CSV:  37530 observations of 13 variables
 
 ```{r SAVING}
-write.csv(seer_prime, "../data/clean/seer_nov10.csv", row.names = FALSE)
+write.csv(seer_prime, "../data/clean/seer_nov13.csv", row.names = FALSE)
 ```
-
-*Visualizations*
-
-Bar Plot of STAGE and Region
-
-```{r Visualization}
-ggplot(seer_prime, aes(x = REGION, fill = STAGE)) +
-  geom_bar(position = "dodge") +
-  labs(
-    title = "Cancer Stage Distribution by Region",
-    x = "Region Type",
-    y = "Number of Cases",
-    fill = "Stage"
-  ) +
-  theme_minimal()
-```
-
-Box Plot for SIZE vs GRADE 
-
-```{r}
-ggplot(seer_prime, aes(x = GRADE, y = SIZE)) +
-  geom_boxplot(fill = "#9ecae1") +
-  labs(
-    title = "Tumor Size by Grade",
-    x = "Tumor Grade",
-    y = "Tumor Size (mm)"
-  ) +
-  theme_minimal()
-```
-
-Box Plot for SIZE vs STAGE
-
-```{r}
-ggplot(seer_prime, aes(x = STAGE, y = SIZE)) +
-  geom_boxplot(fill = "#a1d99b") +
-  labs(
-    title = "Tumor Size by Cancer Stage",
-    x = "Cancer Stage",
-    y = "Tumor Size (mm)"
-  ) +
-  theme_minimal()
-```
-
-Heatmap for REGION x STAGE
-
-```{r}
-seer_prime %>%
-  count(REGION, STAGE) %>%
-  ggplot(aes(x = REGION, y = STAGE, fill = n)) +
-  geom_tile(color = "white") +
-  scale_fill_gradient(low = "#deebf7", high = "#08519c") +
-  labs(
-    title = "Heatmap of Region × Cancer Stage Counts",
-    x = "Region",
-    y = "Cancer Stage",
-    fill = "Count"
-  ) +
-  theme_minimal()
-```
-
-Mean Tumor Size per Region
-
-```{r}
-ggplot(seer_prime, aes(x = STAGE, y = SIZE, fill = STAGE)) +
-  geom_violin(trim = FALSE) +
-  labs(title = "Tumor Size Distribution by Stage", x = "Stage", y = "Tumor Size (mm)") +
-  theme_minimal()
-```
-
-*Summary*:
-
-We can see some issues from these plots, Large metro areas diagnose more cancers and tend to catch them earlier, as seen by the high volume of localized cases. Smaller and nonmetro regions face higher proportions of late-stage cancers, potentially due to limited access to care. Tumor size increases with stage but is less strongly associated with grade or region. The findings underscore healthcare access as a key determinant in early cancer detection. 
-
