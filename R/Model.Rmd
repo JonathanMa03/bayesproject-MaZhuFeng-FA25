@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(brms)
 ```
@@ -17,93 +17,147 @@ library(brms)
 # Loading the Data In
 
 ```{r Load and Prep}
-df <- read.csv("../data/clean/seer_nov10.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+df <- read.csv("../data/clean/seer_nov13.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
 str(df)
 ```
-Reformulating for Readability
+
+## Subset Cancer Type
+
+```{r Cancer choice}
+# TODO: Choose the cancer site (using breast as example)
+cancer_site <- df %>% filter(site == 50)
+str(cancer_site)
+```
+
+## Reformulating for Readability
 
 ```{r Reformat}
-seer_df <- df %>% 
+seer_df <- cancer_site %>% 
   mutate(
     # Convert outcome: 1 = late-stage, 0 = early-stage
     latestage = case_when(
-      STAGE %in% c("Regional", "Distant") ~ 1,
-      STAGE == "Localized" ~ 0,
+      stage %in% c("Regional", "Distant") ~ 1,
+      stage == "Localized" ~ 0,
       TRUE ~ NA_real_
     ),
-    
-    # Ensure all covariates are factor/numeric as needed
-    grade = GRADE,
-    size = SIZE,
-    age = AGE,
-    sex = SEX,
-    race = RACETH,
-    marital = MARRY,
-    year = YEAR,
-    region = REGION,
-
     # Convert IDs to factor
-    patientid = as.factor(PATIENT_ID),
-    regionid = as.factor(REGION_ID)
+    patientid = as.factor(patientid),
+    regionid = as.factor(regionid)
   ) %>%
   # Drop rows with missing outcome or covariates (optional)
-  drop_na(latestage, grade, size, age, sex, race, marital, year)
+  drop_na(latestage, grade, size, age, sex, raceth, marry, year)
 
 seer_df$latestage <- as.integer(seer_df$latestage)
+
+# drop unused columns
+seer_df <- seer_df %>%
+  select(-id, -region, -site, -stage)
+
+str(seer_df)
 ```
 
 # Model Initialization with Prior
 
-```{r Model}
+We will sample with No U-Turn Sampling (NUTS).
+
+We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
+
+```{r Model, echo=TRUE}
 priors <- c(
-  # Fixed effects ~ Normal(0, 2^2)
-  prior(normal(0, 2), class = "b"),
-
-  # Intercept ~ Normal(0, 5^2)
-  prior(normal(0, 5), class = "Intercept"),
-
-  # Group-level SDs ~ Student-t(3, 0, 2.5) ≈ weak InvGamma
-  prior(student_t(3, 0, 2.5), class = "sd") 
+  prior(normal(0, 2), class = "b"), # Fixed effects ~ Normal(0, 2^2)
+  prior(normal(0, 5), class = "Intercept"), # Intercept ~ Normal(0, 5^2)
+  prior(student_t(3, 0, 2.5), class = "sd") # Group-level SDs ~ Student-t(3, 0, 2.5) ≈ weak InvGamma
 )
 
-seer_test <- seer_df[sample(1:nrow(seer_df), 2000), ] #take a small data subset
+set.seed(632)  
 
 # Build 3-level hierarchical model
 brm_model <- brm(
-  formula = latestage ~ grade + size + age + sex + race + marital + year +
+  formula = latestage ~ age + sex + raceth + grade + size + year + marry +
     (1 | patientid) + (1 | regionid),
-  data = seer_test,
-  family = bernoulli(),
+  data = seer_df,
+  family = bernoulli(link = "logit"),
   prior=priors,
   backend = "cmdstanr",
-  warmup = 50,
-  sample_prior = "only",  # prevents fitting to data
-  iter = 100,               # skips sampling entirely
+  warmup = 1000,
+  iter = 2000,               
   chains = 4,             # markov chains
-  silent = 2,              # suppress unnecessary output
-  control = list(adapt_delta = 0.95),
-  seed = 632
+  cores = 4, 
+  control = list(adapt_delta = 0.99, max_treedepth = 15),
+  seed = 632,
+  refresh = 2000 #suppress output
 )
 ```
 
 The model ran successfully. R uses a Stan backend, so if we need to document Stan code, run below:
 
-```{r STAN}
+```{r STAN, echo=TRUE}
 #stancode(brm_model)
 ```
 
-Checking the data passed to stan (this will print a lot of stuff):
+## Model Fine Tuning
 
-```{r}
-#standata(brm_model)
+Increasing Warmpup to 1500 and 3000 iterations, we got divergence on 1/6000 transitions (0.017%), and 2 chains haveing E-BFMI (Energy Bayesian Fraction of Missing Information) less than 0.3 which is a diagnostic of poor posterior exploration which usually happens due to poor scaling. To counter this, we will standardize size and year variables, and increase stepsize to 0.9995 to avoid divergences.
+
+```{r Fine Tune}
+seer_df2 <- seer_df %>%
+  mutate(
+    size_z = scale(size),
+    year_z = scale(year)
+  )
+
+set.seed(632)  
+
+brm_model2 <- brm(formula = latestage ~ age + sex + raceth + grade + size_z + year_z + marry +
+    (1 | patientid) + (1 | regionid),
+  data = seer_df2,
+  family = bernoulli(link = "logit"), prior=priors, backend = "cmdstanr",
+  warmup = 1500, iter = 3000, chains = 4, cores = 4, 
+  control = list(adapt_delta = 0.9995, max_treedepth = 15), init = 0,
+  seed = 632, refresh = 3000 #suppress output
+)
 ```
 
-Prior Summary below:
+## Checking Diagnostics
 
-```{r Prior Summary}
-prior_summary(brm_model)
+We check R and ESS in the model summary.
+
+We check VIF:
+
+```{r Further Fix}
+car::vif(lm(latestage ~ age + sex + raceth + grade + size_z + year_z + marry, data = seer_df2))
 ```
 
-We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
+Posterior summary
 
+```{r, echo=TRUE}
+summary(brm_model2)
+```
 
+Checking Posterior Draws
+
+```{r PP Draws, echo=TRUE}
+pp_check(brm_model2, ndraws = 100)
+```
+
+# Model Summary 
+
+The following posterior summary, random and fixed effects summary code is provided, when we cluster we can save these as dataframes and move from there. 
+
+Posterior Summary:
+
+```{r Posterior Summary, echo=TRUE}
+# posterior_summary <- posterior_summary(brm_model2)
+```
+
+Fixed Effects:
+
+```{r Fixed Effects, echo=TRUE}
+# fixef(brm_model2)
+```
+
+Random Effects (group level variation:
+
+```{r Random Effects, echo=TRUE}
+# ranef(brm_model2)
+```
