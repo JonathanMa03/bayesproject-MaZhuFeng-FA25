@@ -53,3 +53,4 @@ rsconnect/
 # Ignore large or local data
 data/raw/breastcancer.txt
 data/clean/seer_nov10.csv
+R/breast_model.rds
