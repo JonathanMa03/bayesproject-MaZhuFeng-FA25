@@ -119,9 +119,48 @@ brm_model2 <- brm(formula = latestage ~ age + sex + raceth + grade + size_z + ye
 )
 ```
 
-## Saving the Model
+## Checking Diagnostics
 
-```{r Saving}
-write.csv(seer_df2, "../data/clean/seer_df2.csv", row.names = FALSE)
-saveRDS(brm_model2, "../R/breast_model.rds")
+We check R and ESS in the model summary.
+
+We check VIF:
+
+```{r Further Fix}
+car::vif(lm(latestage ~ age + sex + raceth + grade + size_z + year_z + marry, data = seer_df2))
+```
+
+Posterior summary
+
+```{r, echo=TRUE}
+summary(brm_model2)
+```
+
+Checking Posterior Draws
+
+```{r PP Draws, echo=TRUE}
+pp_check(brm_model2, ndraws = 100)
+```
+
+# Model Summary 
+
+The following posterior summary, random and fixed effects summary code is provided, when we cluster we can save these as dataframes and move from there. 
+
+Posterior Summary:
+
+```{r Posterior Summary, echo=TRUE}
+# posterior_summary <- posterior_summary(brm_model2)
+```
+
+Fixed Effects:
+
+```{r Fixed Effects, echo=TRUE}
+# fixef(brm_model2)
+```
+
+Random Effects (group level variation:
+
+```{r Random Effects, echo=TRUE}
+# ranef(brm_model2)
+#TODO add model run file so TAs dont have to full run
+# Save to Posterior file and check VIF, ESS, Rhat, ACF plot
 ```
