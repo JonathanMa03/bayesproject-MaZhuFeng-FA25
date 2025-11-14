@@ -6,6 +6,7 @@ output:
   word_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -160,4 +161,6 @@ Random Effects (group level variation:
 
 ```{r Random Effects, echo=TRUE}
 # ranef(brm_model2)
+#TODO add model run file so TAs dont have to full run
+# Save to Posterior file and check VIF, ESS, Rhat, ACF plot
 ```
