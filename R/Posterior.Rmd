@@ -8,13 +8,196 @@ output:
     df_print: paged
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, messages=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+brm_model2 <- readRDS("../R/breast_model.rds")
+library(dplyr)
+library(ggplot2)
+df <- read.csv("../data/clean/seer_df2.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+
 ```
 
-# Priors
+# Posterior Summary
 
-# Bayesian Inference
 
-# Posterior Sampling
+## Summary 
 
+The following posterior summary, random and fixed effects summary code is provided, when we cluster we can save these as dataframes and move from there. 
+
+
+```{r Posterior Summary, echo=TRUE}
+posterior_summary <- posterior_summary(brm_model2)
+```
+
+## Fixed Effects
+
+```{r Fixed Effects, echo=TRUE}
+fe <- fixef(brm_model2, probs = c(0.025, 0.975))
+```
+
+## Random Effects (group level variation)
+
+```{r Random Effects, echo=TRUE}
+re <- ranef(brm_model2)
+```
+
+## Odds Ratios and Marginal Effects
+
+The odds ratio (OR) is the exponentiated posterior mean (or median) of each coefficient.
+
+```{r OR, echo=TRUE}
+odds_ratios <- exp(fe)
+odds_df <- as.data.frame(odds_ratios)
+odds_df$variable <- rownames(odds_df)
+odds_df <- odds_df[order(abs(odds_df$Estimate - 1), decreasing = TRUE), ]
+head(odds_df, 10)
+```
+
+```{r Marginal Effects, echo=TRUE}
+me_list <- marginal_effects(brm_model2)
+me_combined <- bind_rows(lapply(names(me_list), function(v) {
+  df <- me_list[[v]]
+  df$variable <- v
+  df
+}))
+me_combined <- me_combined %>%
+  mutate(range = upper__ - lower__) %>%
+  arrange(desc(range))
+head(me_combined, 10)
+```
+
+## Shrinkage EFfects
+
+```{r Shrinkage Effects, echo=TRUE}
+patient_re <- as.data.frame(re$patientid)
+region_re <- as.data.frame(re$regionid)
+patient_re$group <- rownames(re$patientid)
+region_re$group <- rownames(re$regionid)
+
+# patient-level shrinkage
+top_patient <- patient_re %>%
+  arrange(desc(abs(Estimate.Intercept))) %>%
+  slice(1:30)  # top 30 most extreme patients
+
+ggplot(top_patient, aes(x = reorder(group, Estimate.Intercept), 
+                        y = Estimate.Intercept)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Q2.5.Intercept, ymax = Q97.5.Intercept), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  coord_flip() +
+  labs(
+    title = "Shrinkage of Patient-Level Intercepts",
+    x = "Patient ID",
+    y = "Estimated Intercept (log-odds scale)"
+  ) +
+  theme_minimal()
+
+# region-level shrinkage
+top_region <- region_re %>%
+  arrange(desc(abs(Estimate.Intercept)))
+
+ggplot(top_region, aes(x = reorder(group, Estimate.Intercept), 
+                        y = Estimate.Intercept)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Q2.5.Intercept, ymax = Q97.5.Intercept), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  coord_flip() +
+  labs(
+    title = "Shrinkage of Region-Level Intercepts",
+    x = "Region ID",
+    y = "Estimated Intercept (log-odds scale)"
+  ) +
+  theme_minimal()
+```
+
+### Raw vs Shrunk Estimates
+
+```{r Comparison}
+# Raw (non-pooled) observed rate of latestage by region
+raw_region <- seer_df2 %>%
+  group_by(regionid) %>%
+  summarise(
+    raw_rate = mean(latestage),
+    n = n()
+  )
+
+# Extract region-level random intercepts (log-odds scale)
+region_re <- as.data.frame(ranef(brm_model2)$regionid)
+region_re$regionid <- rownames(ranef(brm_model2)$regionid)
+
+# Rename for clarity
+region_post <- region_re %>%
+  select(regionid, estimate = Estimate.Intercept,
+         lower = Q2.5.Intercept, upper = Q97.5.Intercept)
+
+# Merge raw rates and posterior estimates
+region_compare <- left_join(raw_region, region_post, by = "regionid") %>%
+  mutate(
+    posterior_prob = plogis(estimate),  # convert log-odds to probability
+    lower_prob = plogis(lower),
+    upper_prob = plogis(upper)
+  )
+
+library(ggplot2)
+
+ggplot(region_compare, aes(x = reorder(regionid, raw_rate))) +
+  geom_point(aes(y = raw_rate), color = "blue", size = 2, alpha = 0.6) +
+  geom_point(aes(y = posterior_prob), color = "red", size = 2, alpha = 0.6) +
+  geom_errorbar(aes(ymin = lower_prob, ymax = upper_prob), color = "red", width = 0.2, alpha = 0.5) +
+  coord_flip() +
+  labs(
+    title = "Shrinkage: Raw vs Posterior Region-Level Late-Stage Probabilities",
+    x = "Region ID",
+    y = "Probability of Late-Stage Diagnosis",
+    caption = "Blue = raw rate, Red = posterior mean ± 95% CI"
+  ) +
+  theme_minimal()
+```
+
+## Intra-Class Correlation
+
+```{r ICC, echo=TRUE}
+# Extract posterior draws of group-level standard deviations
+posterior <- as_draws_df(brm_model2)
+
+# Names like sd_patientid__Intercept, sd_regionid__Intercept
+head(select(posterior, starts_with("sd_")))
+
+# Compute posterior ICCs
+posterior <- posterior %>%
+  mutate(
+    ICC_patientid = (sd_patientid__Intercept^2) / 
+                    (sd_patientid__Intercept^2 + sd_regionid__Intercept^2 + pi^2 / 3),
+    
+    ICC_regionid = (sd_regionid__Intercept^2) / 
+                   (sd_patientid__Intercept^2 + sd_regionid__Intercept^2 + pi^2 / 3)
+  )
+
+posterior %>%
+  summarise(
+    ICC_patientid_mean = mean(ICC_patientid),
+    ICC_patientid_low  = quantile(ICC_patientid, 0.025),
+    ICC_patientid_high = quantile(ICC_patientid, 0.975),
+    
+    ICC_regionid_mean = mean(ICC_regionid),
+    ICC_regionid_low  = quantile(ICC_regionid, 0.025),
+    ICC_regionid_high = quantile(ICC_regionid, 0.975)
+  )
+```
+
+```{r ICC Density, echo=TRUE}
+posterior %>%
+  select(ICC_patientid, ICC_regionid) %>%
+  pivot_longer(everything(), names_to = "Level", values_to = "ICC") %>%
+  ggplot(aes(x = ICC, fill = Level)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Posterior ICC Distributions",
+       x = "ICC", y = "Density") +
+  theme_minimal()
+```
+
+## Posterior Plots
+
+```{r PvP Plot, echo=TRUE}
+
+```
