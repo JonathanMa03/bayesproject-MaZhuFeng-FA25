@@ -54,3 +54,9 @@ rsconnect/
 data/raw/breastcancer.txt
 data/clean/seer_nov10.csv
 R/breast_model.rds
+
+# Ignore word documents
+R/Diagnostics.docx
+R/EDA.docx
+R/Model.docx
+R/Posterior.docx
