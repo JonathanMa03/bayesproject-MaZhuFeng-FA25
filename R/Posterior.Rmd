@@ -3,67 +3,106 @@ title: "Posterior Summary"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
-  word_document: default
-  html_document:
-    df_print: paged
+  word_document:
+    toc: true
+    number_sections: true
 ---
+
+\newpage
 
 ```{r setup, include=FALSE, messages=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 brm_model2 <- readRDS("../R/breast_model.rds")
 library(dplyr)
 library(ggplot2)
+library(sjPlot)
+library(brms)
+library(tidyr)
 df <- read.csv("../data/clean/seer_df2.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
-
 ```
 
 # Posterior Summary
 
+This section summarizes the estimated posterior distributions of the model parameters, including fixed and random effects. We compute point estimates, credible intervals, and derive odds ratios and intra-class correlation metrics to assess variance partitioning.
 
 ## Summary 
 
-The following posterior summary, random and fixed effects summary code is provided, when we cluster we can save these as dataframes and move from there. 
+The following shows the first few rows of the full posterior summary for all parameters, including fixed effects, group-level effects, and auxiliary parameters.
 
 
 ```{r Posterior Summary, echo=TRUE}
 posterior_summary <- posterior_summary(brm_model2)
+head(posterior_summary)
 ```
 
 ## Fixed Effects
 
+Below we visualize the fixed effect posterior estimates and 95% credible intervals. Coefficients are on the log-odds scale. Positive values indicate increased odds of late-stage diagnosis.
+
 ```{r Fixed Effects, echo=TRUE}
 fe <- fixef(brm_model2, probs = c(0.025, 0.975))
+head(fe)
+
+plot_model(brm_model2, type = "est", show.values = TRUE, value.offset = 0.3)
 ```
 
 ## Random Effects (group level variation)
 
+The following summarizes the estimated random intercepts (shrinkage effects) for patient and region. These account for individual and regional variability unexplained by covariates.
+
 ```{r Random Effects, echo=TRUE}
 re <- ranef(brm_model2)
+head(re$patientid)
+head(re$regionid)
 ```
 
-## Odds Ratios and Marginal Effects
+## Odds Ratios
 
 The odds ratio (OR) is the exponentiated posterior mean (or median) of each coefficient.
 
 ```{r OR, echo=TRUE}
 odds_ratios <- exp(fe)
 odds_df <- as.data.frame(odds_ratios)
-odds_df$variable <- rownames(odds_df)
 odds_df <- odds_df[order(abs(odds_df$Estimate - 1), decreasing = TRUE), ]
 head(odds_df, 10)
 ```
 
+## Marginal Effects 
+
 ```{r Marginal Effects, echo=TRUE}
-me_list <- marginal_effects(brm_model2)
-me_combined <- bind_rows(lapply(names(me_list), function(v) {
-  df <- me_list[[v]]
-  df$variable <- v
+library(dplyr)
+library(purrr)
+
+# Get conditional effects
+me_list <- conditional_effects(brm_model2)
+
+# Safe cleaning function
+clean_ce <- function(df, varname) {
+  if ("effect1__" %in% names(df) && !is.character(df$effect1__)) {
+    df$effect1__ <- as.character(df$effect1__)
+  }
+  df$variable <- varname
   df
-}))
-me_combined <- me_combined %>%
+}
+
+# Apply cleaning to all conditional effects
+me_combined <- bind_rows(
+  lapply(names(me_list), function(v) clean_ce(me_list[[v]], v))
+)
+
+# Compute range and summarize by variable
+me_summary <- me_combined %>%
   mutate(range = upper__ - lower__) %>%
-  arrange(desc(range))
-head(me_combined, 10)
+  group_by(variable) %>%
+  summarise(
+    avg_range = mean(range, na.rm = TRUE),
+    avg_estimate = mean(estimate__, na.rm = TRUE),
+    n_levels = n()
+  ) %>%
+  arrange(desc(avg_range))
+
+# Show top 10 most variable effects
+head(me_summary, 10)
 ```
 
 ## Shrinkage EFfects
@@ -110,35 +149,30 @@ ggplot(top_region, aes(x = reorder(group, Estimate.Intercept),
   theme_minimal()
 ```
 
-### Raw vs Shrunk Estimates
+## Raw vs Shrunk Estimates
+
+Red points represent posterior-predicted probabilities, which incorporate both observed data and model priors. Blue points are empirical averages (raw rate). Posterior estimates are shrunk toward the global mean, especially for small regions.
 
 ```{r Comparison}
-# Raw (non-pooled) observed rate of latestage by region
-raw_region <- seer_df2 %>%
+raw_region <- df %>%
   group_by(regionid) %>%
   summarise(
     raw_rate = mean(latestage),
     n = n()
   )
 
-# Extract region-level random intercepts (log-odds scale)
 region_re <- as.data.frame(ranef(brm_model2)$regionid)
-region_re$regionid <- rownames(ranef(brm_model2)$regionid)
-
-# Rename for clarity
+region_re$regionid <- as.integer(rownames(ranef(brm_model2)$regionid))
 region_post <- region_re %>%
   select(regionid, estimate = Estimate.Intercept,
          lower = Q2.5.Intercept, upper = Q97.5.Intercept)
 
-# Merge raw rates and posterior estimates
 region_compare <- left_join(raw_region, region_post, by = "regionid") %>%
   mutate(
     posterior_prob = plogis(estimate),  # convert log-odds to probability
     lower_prob = plogis(lower),
     upper_prob = plogis(upper)
   )
-
-library(ggplot2)
 
 ggplot(region_compare, aes(x = reorder(regionid, raw_rate))) +
   geom_point(aes(y = raw_rate), color = "blue", size = 2, alpha = 0.6) +
@@ -156,33 +190,46 @@ ggplot(region_compare, aes(x = reorder(regionid, raw_rate))) +
 
 ## Intra-Class Correlation
 
-```{r ICC, echo=TRUE}
-# Extract posterior draws of group-level standard deviations
+ICC (intra-class correlation) quantifies the proportion of total variance attributable to grouping structure. Here we compute ICC for both patients and regions.
+
+```{r ICC, echo=TRUE, warnings=FALSE}
 posterior <- as_draws_df(brm_model2)
-
-# Names like sd_patientid__Intercept, sd_regionid__Intercept
-head(select(posterior, starts_with("sd_")))
-
-# Compute posterior ICCs
 posterior <- posterior %>%
   mutate(
-    ICC_patientid = (sd_patientid__Intercept^2) / 
-                    (sd_patientid__Intercept^2 + sd_regionid__Intercept^2 + pi^2 / 3),
+    var_patient = sd_patientid__Intercept^2,
+    var_region  = sd_regionid__Intercept^2,
+    var_resid   = (pi^2) / 3,
+
+    ICC_patientid = var_patient / (var_patient + var_region + var_resid),
+    ICC_regionid  = var_region  / (var_patient + var_region + var_resid)
+  )
+# Compute posterior summaries
+icc_summary <- posterior %>%
+  summarise(
+    SD_patient = mean(sd_patientid__Intercept),
+    SD_region = mean(sd_regionid__Intercept),
     
-    ICC_regionid = (sd_regionid__Intercept^2) / 
-                   (sd_patientid__Intercept^2 + sd_regionid__Intercept^2 + pi^2 / 3)
+    ICC_patient_mean = mean(ICC_patientid),
+    ICC_patient_low  = quantile(ICC_patientid, 0.025),
+    ICC_patient_high = quantile(ICC_patientid, 0.975),
+    
+    ICC_region_mean = mean(ICC_regionid),
+    ICC_region_low  = quantile(ICC_regionid, 0.025),
+    ICC_region_high = quantile(ICC_regionid, 0.975)
   )
 
-posterior %>%
-  summarise(
-    ICC_patientid_mean = mean(ICC_patientid),
-    ICC_patientid_low  = quantile(ICC_patientid, 0.025),
-    ICC_patientid_high = quantile(ICC_patientid, 0.975),
-    
-    ICC_regionid_mean = mean(ICC_regionid),
-    ICC_regionid_low  = quantile(ICC_regionid, 0.025),
-    ICC_regionid_high = quantile(ICC_regionid, 0.975)
+# Create simple summary table
+icc_table <- tibble(
+  Group = c("Patient", "Region"),
+  SD = c(icc_summary$SD_patient, icc_summary$SD_region),
+  ICC = c(icc_summary$ICC_patient_mean, icc_summary$ICC_region_mean),
+  CI = c(
+    sprintf("[%.3f, %.3f]", icc_summary$ICC_patient_low, icc_summary$ICC_patient_high),
+    sprintf("[%.3f, %.3f]", icc_summary$ICC_region_low, icc_summary$ICC_region_high)
   )
+)
+
+knitr::kable(icc_table, caption = "Posterior Intra-Class Correlation Estimates")
 ```
 
 ```{r ICC Density, echo=TRUE}
@@ -196,8 +243,3 @@ posterior %>%
   theme_minimal()
 ```
 
-## Posterior Plots
-
-```{r PvP Plot, echo=TRUE}
-
-```

@@ -3,27 +3,34 @@ title: "Posterior Summary"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
-  word_document: default
-  html_document:
-    df_print: paged
+  word_document:
+    toc: true
+    number_sections: true
 ---
+
+\newpage
+
+# Diagnostics
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 breast <- readRDS("../R/breast_model.rds")
+seer_df2 <- read.csv("../data/clean/seer_df2.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+library(bayesplot)
+library(rstan)
 ```
 
 Model is loaded from an RDS object.
 
-# Rhat and ESS
+## Rhat and ESS
 
-```{r Summary}
+```{r Summary, warnings=FALSE}
 summary(breast)
 ```
 
 All Rhat and ESS Values look valid, and 1 divergent transition, but its small enough to be due to chance.
 
-# VIF
+## VIF
 
 We check VIF, and confirm all values are reasonable.
 
@@ -31,12 +38,12 @@ We check VIF, and confirm all values are reasonable.
 car::vif(lm(latestage ~ age + sex + raceth + grade + size_z + year_z + marry, data = seer_df2))
 ```
 
-# Posterior Draws
+## Posterior Draws
 
 Checking Posterior Draws
 
 ```{r PP Draws, echo=TRUE}
-pp_check(brm_model2, ndraws = 100)
+pp_check(breast, ndraws = 100)
 ```
 
 Posterior draws look Ok as well.

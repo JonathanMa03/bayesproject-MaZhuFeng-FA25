@@ -3,11 +3,12 @@ title: "Model Building"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
-  word_document: default
-  html_document:
-    df_print: paged
-  pdf_document: default
+  word_document:
+    toc: true
+    number_sections: true
 ---
+
+\newpage
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -25,8 +26,7 @@ str(df)
 ## Subset Cancer Type
 
 ```{r Cancer choice}
-# TODO: Choose the cancer site (using breast as example)
-cancer_site <- df %>% filter(site == 50)
+cancer_site <- df %>% filter(site == 50) #breast cancer
 str(cancer_site)
 ```
 
@@ -63,6 +63,21 @@ We will sample with No U-Turn Sampling (NUTS).
 
 We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
 
+## Model Specification
+
+Logistic regression with:
+
+- Outcome: `latestage` (1 = regional/distant, 0 = localized)
+- Fixed effects: `age`, `sex`, `raceth`, `grade`, `size_z`, `year_z`, `marry`
+- Random intercepts:
+    - Patient-level: `(1 | patientid)`
+    - Region-level: `(1 | regionid)`
+- Estimation: NUTS via `cmdstanr` backend
+- Priors:
+    - $\beta_j \sim \mathcal{N}(0, 2^2)$
+    - Intercept $\sim \mathcal{N}(0, 5^2)$
+    - Group SDs $\sim t_3(0, 2.5)$ (approx IG)
+
 ```{r Model, echo=TRUE}
 priors <- c(
   prior(normal(0, 2), class = "b"), # Fixed effects ~ Normal(0, 2^2)
@@ -89,6 +104,8 @@ brm_model <- brm(
   refresh = 2000 #suppress output
 )
 ```
+
+## Opt. Stan Code 
 
 The model ran successfully. R uses a Stan backend, so if we need to document Stan code, run below:
 
@@ -119,7 +136,7 @@ brm_model2 <- brm(formula = latestage ~ age + sex + raceth + grade + size_z + ye
 )
 ```
 
-## Saving the Model
+# Saving the Model
 
 ```{r Saving}
 write.csv(seer_df2, "../data/clean/seer_df2.csv", row.names = FALSE)

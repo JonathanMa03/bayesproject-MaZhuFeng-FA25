@@ -3,10 +3,12 @@ title: "Breast Exploratory Analysis"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
-  word_document: default
-  html_document:
-    df_print: paged
+  word_document:
+    toc: true
+    number_sections: true
 ---
+
+\newpage
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -18,46 +20,42 @@ library(ggthemes)
 library(scales)
 ```
 
-Project Idea: Bayesian Hierarchal Model > Posterior Summary > Clustering. 
+# Introduction
 
-Data: Breast Cancer Data from SEER. 
+This exploratory data analysis (EDA) is the first step in our project pipeline:
 
-Level via Tumor, Patient, and Region (Urban/Rural Code). 
+1. Bayesian Hierarchical Modeling
+2. Posterior Inference & Diagnostics
+3. Clustering of Individual Risk Profiles
 
-We start with 5149008 observations of 12 variables (V#). 
+We use data from the [SEER Program](https://seer.cancer.gov/) focused on breast cancer cases, structured across three levels:
 
-*Level 1: Tumor*
+- **Level 1 (Tumor):** Tumor-specific details (e.g., stage, size, grade)
+- **Level 2 (Patient):** Demographics and marital status
+- **Level 3 (Region):** County-level metro/rural designations
 
-V3: SEER stage (Localized, Regional, Distant). == STAGE
+# Data Structure and Levels
 
-V7: Tumor Grade (Grade 1-4 or unknown). == GRADE
-
-V10: EOD Tumor Size (1988+) == SIZE
-
-V8: Tumor Site (Esophageal, Lung, etc), https://seer.cancer.gov/siterecode
-
-*Level 2: Patient*
-
-V1: Patient ID. == ID
-
-V4: Binned Age group at diagnosis. == AGE
-
-V5: Patient Sex. == SEX
-
-V6: Race/Ethnicity. == RACETH
-
-V11: Year of Diagnosis. == YEAR
-
-V12: Marital Status. == MARRY
-
-*Level 3: Region*
-
-V2: Regional Area (Metro < 250k, Metro < 1m, Metro > 1m, Nonmetro adjacent, nonmetro nonadjacent, unknown). == REGION
+| Level    | Variable | Description                                    |
+|----------|----------|------------------------------------------------|
+| Tumor    | stage    | SEER stage: Localized, Regional, Distant       |
+| Tumor    | grade    | Tumor grade: 1–4 or unknown                    |
+| Tumor    | size     | EOD Tumor Size (mm)                            |
+| Tumor    | site     | Tumor site (ICD code)                          |
+| Patient  | id       | Patient identifier                             |
+| Patient  | age      | Age group at diagnosis                         |
+| Patient  | sex      | Biological sex                                 |
+| Patient  | raceth   | Race/ethnicity                                 |
+| Patient  | year     | Year of diagnosis                              |
+| Patient  | marry    | Marital status                                 |
+| Region   | region   | County-level metro/rural code                  |
 
 
 ```{r Data Loading}
 seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
 ```
+
+We replace "Unknown" and "Blank(s)" with `NA`, and then keep only complete cases:
 
 ```{r Rename and NA drop}
 seer_prime <- seer %>%
@@ -94,6 +92,8 @@ we have 209123 cases to work with (4.06% of the whole thing) after removing "Unk
 
 Further cleaning is done via tabling all variables. 
 
+## Cancer Site
+
 We want to filter for top ten cancer sites (breast, lung, etc). We exclude 998 and 999 because they are unknown. The code is structured so we can switch sites.
 
 ```{r SITE}
@@ -109,6 +109,8 @@ seer_prime <- seer_prime %>%
 
 table(seer_prime$site)
 ```
+
+## Region
 
 REGION: collapse and recode into ordered, interpretable regional factors, removes the Alaska/Hawaii “unknown” entries.
 
@@ -126,6 +128,8 @@ seer_prime <- seer_prime %>%
 table(seer_prime$region)
 ```
 
+## Tumor Stage
+
 STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
 
 ```{r STAGE}
@@ -139,6 +143,8 @@ seer_prime <- seer_prime %>%
   )
 table(seer_prime$stage)
 ```
+
+## Tumor Grade
 
 GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.). Convert them to Start (1/2) and End (3/4) since our model is logistic
 
@@ -162,6 +168,8 @@ seer_prime <- seer_prime %>%
 table(seer_prime$grade)
 ```
 
+## Tumor Size
+
 SIZE: Making this numeric and then filtering implausible values, we can bin these ("≤20mm", "21–50mm", "51–100mm", ">100mm") if needed. 
 
 ```{r SIZE}
@@ -172,6 +180,8 @@ seer_prime <- seer_prime %>%
   )
 summary(seer_prime$size)
 ```
+
+## Marital Status
 
 MARRY: Making this binary, only married or unmarried. 
 
@@ -186,6 +196,8 @@ seer_prime <- seer_prime %>%
   )
 table(seer_prime$marry)
 ```
+
+## Race
 
 Recode RACETH to be three levels
 
@@ -202,6 +214,8 @@ seer_prime <- seer_prime %>%
 table(seer_prime$raceth)
 ```
 
+## Complete Summary of available data
+
 Seeing how many cases are available now:
 
 ```{r Checking}
@@ -209,7 +223,7 @@ seer_prime <- seer_prime %>% filter(complete.cases(id, region, stage, age, sex, 
 cat("Remaining complete cases:", nrow(seer_prime), "\n")
 ```
 
-*Hierarchal Encoding*
+# Hierarchal Encoding
 
 To do hierarchal models in R, identifiers must be encoded as numeric integers (e.g., 1, 2, ..., N) for levels like REGION and ID.
 
@@ -237,6 +251,8 @@ Inspect the data:
 ```{r Inspection}
 str(seer_prime)
 ```
+
+# Saving Final Data
 
 Code here so you can save it as CSV:  37530 observations of 13 variables
 
