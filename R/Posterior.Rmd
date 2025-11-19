@@ -243,3 +243,112 @@ posterior %>%
   theme_minimal()
 ```
 
+# Preparing Data for Clustering
+
+We want to do BGMM, so we need to standardizee values after extracting. These dfs are named and exported:
+
+- dfRE_P is the best candidate for patient-level clustering with BGMM.
+
+- dfRE_R is too small (3 obs), so not suited for BGMM, can just descriptively summarize it.
+
+- dfFE and dfOR match in size and likely map onto your 27 predictors 
+
+- dfPOST has ~3,000 rows
+
+Maybe run PCA before clustering?
+
+Posterior Summary:
+
+```{r dfPOST}
+dfPOST <- as.data.frame(posterior_summary)
+dfPOST <- tibble::rownames_to_column(dfPOST, var = "Parameter")
+dfPOST <- dfPOST %>%
+  mutate(shrinkage = Q97.5 - Q2.5)
+```
+
+Fixed Effects:
+
+```{r dfFE}
+dfFE <- as.data.frame(fe)
+dfFE <- tibble::rownames_to_column(dfFE, var = "Predictor")
+dfFE <- dfFE %>%
+  mutate(shrinkage = Q97.5 - Q2.5)
+```
+
+Patient Random Effects:
+
+```{r dfRE_P}
+dfRE_P <- as.data.frame(re$patientid)
+dfRE_P <- tibble::rownames_to_column(dfRE_P, var = "PatientID")
+dfRE_P <- dfRE_P %>%
+  mutate(shrinkage = Q97.5.Intercept - Q2.5.Intercept)
+```
+
+Region Random Effects:
+
+```{r dfRE_R}
+dfRE_R <- as.data.frame(re$regionid)
+dfRE_R <- tibble::rownames_to_column(dfRE_R, var = "RegionID")
+dfRE_R <- dfRE_R %>%
+  mutate(shrinkage = Q97.5.Intercept - Q2.5.Intercept)
+```
+
+Marginal Effects:
+
+```{r dfME}
+dfME <- me_combined %>%
+  select(variable, effect1__, estimate__, se__, lower__, upper__) %>%
+  rename(
+    Level = effect1__,
+    Estimate = estimate__,
+    SE = se__,
+    Lower = lower__,
+    Upper = upper__
+  ) %>%
+  mutate(shrinkage = Upper - Lower)
+```
+
+Odds Ratios:
+
+```{r dfOR}
+dfOR <- odds_df %>%
+  tibble::rownames_to_column(var = "Predictor") %>%
+  mutate(
+    logOR = log(Estimate),
+    shrinkage = Q97.5 - Q2.5
+  )
+```
+
+## Saving Data for Clustering
+
+```{r Standardize and Save}
+standardize_df <- function(df, id_col = NULL) {
+  if (!is.null(id_col)) {
+    ids <- df[[id_col]]
+    num_data <- df %>% select(where(is.numeric))
+    scaled_data <- as.data.frame(scale(num_data))
+    scaled_data[[id_col]] <- ids
+    return(scaled_data)
+  } else {
+    return(as.data.frame(scale(df %>% select(where(is.numeric)))))
+  }
+}
+
+dfPOST_std <- standardize_df(dfPOST, id_col = "Parameter")
+write.csv(dfPOST_std, "../data/clean/dfPOST.csv", row.names = FALSE)
+
+dfFE_std <- standardize_df(dfFE, id_col = "Predictor")
+write.csv(dfFE_std, "../data/clean/dfFE.csv", row.names = FALSE)
+
+dfRE_P_std <- standardize_df(dfRE_P, id_col = "PatientID")
+write.csv(dfRE_P_std, "../data/clean/dfRE_P.csv", row.names = FALSE)
+
+dfRE_R_std <- standardize_df(dfRE_R, id_col = "RegionID")
+write.csv(dfRE_R_std, "../data/clean/dfRE_R.csv", row.names = FALSE)
+
+dfME_std <- standardize_df(dfME)
+write.csv(dfME_std, "../data/clean/dfME.csv", row.names = FALSE)
+
+dfOR_std <- standardize_df(dfOR, id_col = "Predictor")
+write.csv(dfOR_std, "../data/clean/dfOR.csv", row.names = FALSE)
+```
