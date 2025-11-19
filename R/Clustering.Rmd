@@ -1,0 +1,49 @@
+---
+title: "BGMM Clustering"
+author: "Jonathan Ma"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+    number_sections: true
+---
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(mclust)
+```
+
+# Bayesian-Gaussian Mixture Model
+
+## Data Preparation
+
+```{r Data Loading}
+df1 <- read_csv("../data/clean/dfRE_P.csv")
+df2 <- read_csv("../data/clean/seer_df2.csv")
+```
+
+Store dfRE_P as df1 and seer_df2 as df2
+
+## Cluster Patient Ranefs
+
+```{r Clustering}
+bgmm_model <- Mclust(dfRE_P %>% select(-PatientID)) 
+dfRE_P$cluster <- bgmm_model$classification
+```
+
+## Merge the cluster labels back to metadata
+
+```{r Merging}
+clustered_patients <- dfRE_P %>%
+  select(PatientID, cluster) %>%
+  left_join(seer_df2, by = "PatientID")
+```
+
+## Interpret and visualize clusters
+
+```{r Analysis}
+table(clustered_patients$cluster, clustered_patients$age_group)
+table(clustered_patients$cluster, clustered_patients$race)
+```

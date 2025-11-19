@@ -57,7 +57,7 @@ seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, s
 
 We replace "Unknown" and "Blank(s)" with `NA`, and then keep only complete cases:
 
-```{r Rename and NA drop}
+```{r Rename}
 seer_prime <- seer %>%
   transmute(
     id     = V1,
@@ -76,7 +76,44 @@ seer_prime <- seer %>%
 seer_prime <- seer_prime %>%
   mutate(across(where(is.character), ~na_if(., "Unknown"))) %>%
   mutate(across(where(is.character), ~na_if(., "Blank(s)")))
+```
 
+## Is missing data more common in older patients?
+
+```{r}
+df <- seer_prime
+
+df <- seer_prime %>%
+  mutate(size_missing = is.na(size))
+
+ggplot(df, aes(x = age, fill = size_missing)) +
+  geom_bar(position = "fill") +
+  labs(title = "Proportion of Missing Tumor Size by Age",
+       y = "Proportion Missing",
+       x = "Age Group",
+       fill = "Size Missing") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Is missing data associated with Race/Ethnicity?
+
+```{r}
+table(df$raceth, is.na(df$size))
+```
+
+## is stage more likely to be missing in nonmetro rural areas?
+
+```{r}
+df <- df %>%
+  mutate(grade_missing = is.na(grade),
+         region_type = factor(region))
+
+# Proportions
+prop.table(table(df$region, df$grade_missing), 1)
+```
+
+```{r}
 seer_prime <- seer_prime %>%
   filter(complete.cases(.))
 
