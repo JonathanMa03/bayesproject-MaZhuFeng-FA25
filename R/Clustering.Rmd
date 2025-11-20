@@ -13,37 +13,120 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(mclust)
+library(caret)
+library(dplyr)
+library(ggplot2)
 ```
 
 # Bayesian-Gaussian Mixture Model
 
 ## Data Preparation
 
-```{r Data Loading}
+```{r Data Loading, messages=FALSE}
 df1 <- read_csv("../data/clean/dfRE_P.csv")
 df2 <- read_csv("../data/clean/seer_df2.csv")
 ```
 
+## PCA
+
+```{r}
+X <- scale(df1 %>% select(-PatientID))
+pca <- prcomp(X, center = TRUE, scale. = TRUE)
+summary(pca) 
+
+pca <- prcomp(df1 %>% select(-PatientID), center = TRUE, scale. = TRUE)
+X_reduced <- pca$x[, 1:2]
+```
+
 Store dfRE_P as df1 and seer_df2 as df2
+
+# Patient Clustering
 
 ## Cluster Patient Ranefs
 
 ```{r Clustering}
-bgmm_model <- Mclust(dfRE_P %>% select(-PatientID)) 
-dfRE_P$cluster <- bgmm_model$classification
+library(mclust)
+bgmm_model <- Mclust(X_reduced)
+summary(bgmm_model)
+plot(bgmm_model, what = "classification")
 ```
 
 ## Merge the cluster labels back to metadata
 
 ```{r Merging}
-clustered_patients <- dfRE_P %>%
-  select(PatientID, cluster) %>%
-  left_join(seer_df2, by = "PatientID")
+cluster_df <- data.frame(patientid = df1$PatientID,
+                         Cluster = bgmm_model$classification)
+
+df_clustered <- df2 %>%
+  inner_join(cluster_df, by = "patientid")
 ```
 
-## Interpret and visualize clusters
+## Summary by cluster
 
 ```{r Analysis}
-table(clustered_patients$cluster, clustered_patients$age_group)
-table(clustered_patients$cluster, clustered_patients$race)
+df_clustered %>%
+  group_by(Cluster) %>%
+  summarise(
+    Count = n(),
+    Most_Common_Age = names(sort(table(age), decreasing = TRUE))[1],
+    Most_Common_Race = names(sort(table(raceth), decreasing = TRUE))[1],
+    Most_Common_Sex = names(sort(table(sex), decreasing = TRUE))[1],
+    Most_Common_Region = names(sort(table(regionid), decreasing = TRUE))[1]
+  )
+```
+
+## Age Distribution by Cluster
+
+```{r}
+ggplot(df_clustered, aes(x = age, fill = factor(Cluster))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Age Distribution by Cluster",
+    x = "Age Group",
+    y = "Proportion",
+    fill = "Cluster"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Race Distribution by Cluster
+
+```{r}
+ggplot(df_clustered, aes(x = raceth, fill = factor(Cluster))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Race Distribution by Cluster",
+    x = "Race/Ethnicity",
+    y = "Proportion",
+    fill = "Cluster"
+  ) +
+  theme_minimal()
+```
+
+## Cluster Size
+
+```{r}
+df_clustered %>%
+  count(Cluster) %>%
+  ggplot(aes(x = factor(Cluster), y = n, fill = factor(Cluster))) +
+  geom_col() +
+  labs(
+    title = "Size of Each Cluster",
+    x = "Cluster",
+    y = "Number of Patients"
+  ) +
+  theme_minimal()
+```
+
+## Tumor Size by cluster
+
+```{r}
+ggplot(df_clustered, aes(x = factor(Cluster), y = size, fill = factor(Cluster))) +
+  geom_boxplot() +
+  labs(
+    title = "Tumor Size by Cluster",
+    x = "Cluster",
+    y = "Tumor Size"
+  ) +
+  theme_minimal()
 ```
