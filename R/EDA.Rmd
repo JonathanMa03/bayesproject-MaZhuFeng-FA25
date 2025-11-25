@@ -113,7 +113,33 @@ df <- df %>%
 prop.table(table(df$region, df$grade_missing), 1)
 ```
 
-Although we did not do a statistical test for MCAR, visual and tabular inspection clearly show patterns in missingness. Tumor size by age is non-uniform, with younger and older ends having higher missing rates. Missing rates also vary by racial group, with whites having notably higher missingness
+Although we did not do a statistical test for MCAR, visual and tabular inspection clearly show patterns in missingness. Tumor size by age is non-uniform, with younger and older ends having higher missing rates. Missing rates also vary by racial group, with whites having notably higher missingness.
+
+Logistic regression is a standard method for exploring missing data mechanisms. By modeling the missingness indicator (e.g., stage_miss) as a binary outcome and regressing it on observed variables, we can test whether missingness is related to any known covariates.
+
+If none of the predictors are significant, this supports the MCAR assumption. But if missingness is significantly associated with observed variables (as seen here), MCAR is rejected, and MAR becomes a more reasonable assumption for downstream modeling.
+
+```{r}
+# Create a missingness indicator for tumor size
+df$stage_miss <- is.na(df$stage)
+
+# Convert to factor if not already
+df$sex <- factor(df$sex)
+df$raceth <- factor(df$raceth)
+df$region <- factor(df$region)
+df$age <- factor(df$age)
+df$marry <- factor(df$marry)
+df$grade <- factor(df$grade)
+df$size <- factor(df$size)
+
+# Fit logistic regression model to predict missingness
+miss_model <- glm(stage_miss ~ sex + raceth + region + age + marry + grade + size,
+                  data = df, family = binomial)
+
+summary(miss_model)
+```
+
+The missingness in stage is likely not MCAR, because missingness depends significantly on several observed variables (e.g., sex, raceth, region, age, marry, grade, size). Therefore, it’s reasonable to assume MAR (Missing at Random) for modeling purposes.
 
 ## Selecting Complete Cases
 
