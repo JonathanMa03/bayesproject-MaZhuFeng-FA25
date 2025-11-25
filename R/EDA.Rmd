@@ -113,6 +113,10 @@ df <- df %>%
 prop.table(table(df$region, df$grade_missing), 1)
 ```
 
+Although we did not do a statistical test for MCAR, visual and tabular inspection clearly show patterns in missingness. Tumor size by age is non-uniform, with younger and older ends having higher missing rates. Missing rates also vary by racial group, with whites having notably higher missingness
+
+## Selecting Complete Cases
+
 ```{r}
 seer_prime <- seer_prime %>%
   filter(complete.cases(.))
