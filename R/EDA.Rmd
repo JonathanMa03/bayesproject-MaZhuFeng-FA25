@@ -114,7 +114,7 @@ prop.table(table(df$region, df$grade_missing), 1)
 ```
 
 Although we did not do a statistical test for MCAR, visual and tabular inspection clearly show patterns in missingness. Tumor size by age is non-uniform, with younger and older ends having higher missing rates. Missing rates also vary by racial group, with whites having notably higher missingness.
-
+ 
 Logistic regression is a standard method for exploring missing data mechanisms. By modeling the missingness indicator (e.g., stage_miss) as a binary outcome and regressing it on observed variables, we can test whether missingness is related to any known covariates.
 
 If none of the predictors are significant, this supports the MCAR assumption. But if missingness is significantly associated with observed variables (as seen here), MCAR is rejected, and MAR becomes a more reasonable assumption for downstream modeling.
