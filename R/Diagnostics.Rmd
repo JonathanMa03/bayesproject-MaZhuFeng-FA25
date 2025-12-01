@@ -13,22 +13,22 @@ output:
 # Diagnostics
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4)
 breast <- readRDS("../R/breast_model.rds")
 seer_df2 <- read.csv("../data/clean/seer_df2.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
 library(bayesplot)
 library(rstan)
 ```
 
-Model is loaded from an RDS object.
+Model is loaded from an RDS object in the repository, so you dont have to wait a long time for it to run.
 
-## Rhat and ESS
+## Convergence and Efficienct
 
-```{r Summary, warnings=FALSE}
+```{r Summary}
 summary(breast)
 ```
 
-All Rhat and ESS Values look valid, and 1 divergent transition, but its small enough to be due to chance.
+We see no scale reduction (Rhat=1.0 in all cases) and ESS are all sufficiently large, and 1 divergent transition, but its small enough to be due to chance.
 
 ## VIF
 

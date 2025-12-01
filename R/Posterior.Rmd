@@ -11,7 +11,7 @@ output:
 \newpage
 
 ```{r setup, include=FALSE, messages=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4)
 brm_model2 <- readRDS("../R/breast_model.rds")
 library(dplyr)
 library(ggplot2)
@@ -30,7 +30,7 @@ This section summarizes the estimated posterior distributions of the model param
 The following shows the first few rows of the full posterior summary for all parameters, including fixed effects, group-level effects, and auxiliary parameters.
 
 
-```{r Posterior Summary, echo=TRUE}
+```{r Posterior Summary}
 posterior_summary <- posterior_summary(brm_model2)
 head(posterior_summary)
 ```
@@ -39,7 +39,7 @@ head(posterior_summary)
 
 Below we visualize the fixed effect posterior estimates and 95% credible intervals. Coefficients are on the log-odds scale. Positive values indicate increased odds of late-stage diagnosis.
 
-```{r Fixed Effects, echo=TRUE}
+```{r Fixed Effects}
 fe <- fixef(brm_model2, probs = c(0.025, 0.975))
 head(fe)
 
@@ -50,7 +50,7 @@ plot_model(brm_model2, type = "est", show.values = TRUE, value.offset = 0.3)
 
 The following summarizes the estimated random intercepts (shrinkage effects) for patient and region. These account for individual and regional variability unexplained by covariates.
 
-```{r Random Effects, echo=TRUE}
+```{r Random Effects}
 re <- ranef(brm_model2)
 head(re$patientid)
 head(re$regionid)
@@ -60,7 +60,7 @@ head(re$regionid)
 
 The odds ratio (OR) is the exponentiated posterior mean (or median) of each coefficient.
 
-```{r OR, echo=TRUE}
+```{r OR}
 odds_ratios <- exp(fe)
 odds_df <- as.data.frame(odds_ratios)
 odds_df <- odds_df[order(abs(odds_df$Estimate - 1), decreasing = TRUE), ]
@@ -69,7 +69,7 @@ head(odds_df, 10)
 
 ## Marginal Effects 
 
-```{r Marginal Effects, echo=TRUE}
+```{r Marginal Effects}
 library(dplyr)
 library(purrr)
 
@@ -107,7 +107,7 @@ head(me_summary, 10)
 
 ## Shrinkage EFfects
 
-```{r Shrinkage Effects, echo=TRUE}
+```{r Shrinkage Effects}
 patient_re <- as.data.frame(re$patientid)
 region_re <- as.data.frame(re$regionid)
 patient_re$group <- rownames(re$patientid)
@@ -192,7 +192,7 @@ ggplot(region_compare, aes(x = reorder(regionid, raw_rate))) +
 
 ICC (intra-class correlation) quantifies the proportion of total variance attributable to grouping structure. Here we compute ICC for both patients and regions.
 
-```{r ICC, echo=TRUE, warnings=FALSE}
+```{r ICC}
 posterior <- as_draws_df(brm_model2)
 posterior <- posterior %>%
   mutate(
@@ -232,7 +232,7 @@ icc_table <- tibble(
 knitr::kable(icc_table, caption = "Posterior Intra-Class Correlation Estimates")
 ```
 
-```{r ICC Density, echo=TRUE}
+```{r ICC Density}
 posterior %>%
   select(ICC_patientid, ICC_regionid) %>%
   pivot_longer(everything(), names_to = "Level", values_to = "ICC") %>%

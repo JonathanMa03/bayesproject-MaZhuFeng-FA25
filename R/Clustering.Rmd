@@ -1,5 +1,5 @@
 ---
-title: "BGMM Clustering"
+title: "BGMM Clustering Analysis"
 author: "Jonathan Ma"
 date: "`r Sys.Date()`"
 output:
@@ -16,54 +16,73 @@ library(mclust)
 library(caret)
 library(dplyr)
 library(ggplot2)
-```
-
-# Bayesian-Gaussian Mixture Model
-
-## Data Preparation
-
-```{r Data Loading, messages=FALSE}
+library(tidyverse)
 df1 <- read_csv("../data/clean/dfRE_P.csv")
 df2 <- read_csv("../data/clean/seer_df2.csv")
 ```
 
+# Bayesian-Gaussian Mixture Model. 
+
+GMM is a probabilistic clustering method assuming data is generated from multiple gaussian distributions, and the Bayesian version extends this by incorporating prior distributions, which makes inference more reliable when data is noisy and small. BGMM also uses posterior probabilities for a softer clustering approach that is useful when the group structure is nested, as is patient-level health data  
+
 ## PCA
 
-```{r}
+High dimensional datasets often contain collinear features that may lead mixtures to overfit, so we employ PCA so the original variables into a smaller set of uncorrelated components capture the majority of the variance in the data. This not only speeds up the BGMM but also improves stability of estimates, maximizing our signal-to-noise ratio
+
+```{r pca_output, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 X <- scale(df1 %>% select(-PatientID))
 pca <- prcomp(X, center = TRUE, scale. = TRUE)
-summary(pca) 
-
-pca <- prcomp(df1 %>% select(-PatientID), center = TRUE, scale. = TRUE)
+pca_summary <- summary(pca)$importance
+pca_df <- as.data.frame(t(pca_summary))
+pca_df <- tibble::rownames_to_column(pca_df, "Principal Component")
+knitr::kable(
+  pca_df[1:4, ],
+  digits = 4,
+  caption = "PCA Summary: Proportion of Variance Explained",
+  align = 'c'
+)
+sdev <- pca$sdev
+var_explained <- sdev^2 / sum(sdev^2)
+plot(
+  var_explained,
+  type = "b",
+  xlab = "Principal Component",
+  ylab = "Proportion of Variance Explained",
+  main = "Scree Plot",
+  pch = 19
+)
 X_reduced <- pca$x[, 1:2]
 ```
 
-Store dfRE_P as df1 and seer_df2 as df2
+PC1 explained 73.0% and PC2 explained 26.7%, for a cumulative variance of 99.7%. This strong two-dimensional representation justifies the use of only the first two principal components for downstream clustering. The scree plot visually supports this choice, showing a sharp drop in variance after PC2, with subsequent components contributing negligible information. 
 
 # Patient Clustering
 
-## Cluster Patient Ranefs
+After reducing the dimensionality with PCA, the next step is to cluster patients based on their posterior patient‑level effects. These effects summarize each patient’s underlying risk profile after accounting for tumor‑level covariates and regional variation. The resulting clusters help highlight clinically meaningful patterns such as age, race, or tumor size distributions, that may signal differential risk pathways within the population.  
 
-```{r Clustering}
-library(mclust)
+## Clustering Patient Random EFfects
+
+```{r Clustering, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
+# Store dfRE_P as df1 and seer_df2 as df2
+
+set.seed(42)
 bgmm_model <- Mclust(X_reduced)
-summary(bgmm_model)
+bgmm_summary <- capture.output(summary(bgmm_model))
+cat(paste(bgmm_summary, collapse = "\n"))
 plot(bgmm_model, what = "classification")
 ```
 
-## Merge the cluster labels back to metadata
+## Summary by cluster
 
-```{r Merging}
+We now merge the clusters back to the metadata, and summarize by cluster.
+
+```{r Merging and Summary, echo=FALSE, message=FALSE, warning=FALSE}
 cluster_df <- data.frame(patientid = df1$PatientID,
                          Cluster = bgmm_model$classification)
 
 df_clustered <- df2 %>%
   inner_join(cluster_df, by = "patientid")
-```
 
-## Summary by cluster
-
-```{r Analysis}
 df_clustered %>%
   group_by(Cluster) %>%
   summarise(
@@ -72,12 +91,20 @@ df_clustered %>%
     Most_Common_Race = names(sort(table(raceth), decreasing = TRUE))[1],
     Most_Common_Sex = names(sort(table(sex), decreasing = TRUE))[1],
     Most_Common_Region = names(sort(table(regionid), decreasing = TRUE))[1]
+  ) %>%
+  knitr::kable(
+    caption = "Table: Demographic Summary by Cluster",
+    col.names = c("Cluster", "Count", "Most Common Age", 
+                  "Most Common Race", "Most Common Sex", "Most Common Region"),
+    align = "c"
   )
 ```
 
 ## Age Distribution by Cluster
 
-```{r}
+The age–by–cluster distribution shows that the patient groups differ substantially in their age composition. The largest cluster, representing patients in their mid‑70s to late‑70s, dominates the older age categories, indicating that one major group is composed primarily of elderly individuals. In contrast, several other clusters including those corresponding to the 60–64 and 65–69 age ranges are concentrated among younger seniors, suggesting a distinct, somewhat healthier or earlier‑stage demographic. Smaller clusters begin to appear gradually through middle and later adulthood, reflecting more specialized or less common patient profiles. Overall, the visualization highlights age as a key driver of cluster separation, with some groups representing the oldest and potentially highest‑risk patients and others representing comparatively younger subsets within the older adult population.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 ggplot(df_clustered, aes(x = age, fill = factor(Cluster))) +
   geom_bar(position = "fill") +
   labs(
@@ -91,7 +118,9 @@ ggplot(df_clustered, aes(x = age, fill = factor(Cluster))) +
 
 ## Race Distribution by Cluster
 
-```{r}
+The race distribution reveals that some clusters are broadly represented across all racial groups, while others are more concentrated within specific categories. Clusters 4 and 5 appear consistently across Black, White, and “Other” race groups, suggesting that these clusters capture demographic or clinical patterns not strongly tied to race. Cluster 1, which contains many of the older and higher‑risk patients, makes up a relatively larger share of White and Black patients compared to the “Other” group. Conversely, the smaller clusters particularly the ones associated with clusters 8 and 9 are more prominent within the “Other” race category, indicating that these patients may have distinct characteristics or risk factors. Overall, the racial patterns suggest moderate heterogeneity, with some clusters distributed broadly across groups and others more race‑specific.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 ggplot(df_clustered, aes(x = raceth, fill = factor(Cluster))) +
   geom_bar(position = "fill") +
   labs(
@@ -105,7 +134,11 @@ ggplot(df_clustered, aes(x = raceth, fill = factor(Cluster))) +
 
 ## Cluster Size
 
-```{r}
+The two largest groups are composed of White females aged 60–64 years, collectively representing over 1,600 patients. This suggests that this demographic is highly prevalent in the dataset and may define the “typical” patient profile. Another large group consists of White females aged 75–79 years, with over 500 patients, making it a substantial older-age subgroup.
+
+A moderately sized group includes White males aged 70–74 years, suggesting a distinct older male segment. Smaller profile groups include patients identified as ‘Other’ race and aged 75–79, as well as White females aged 70–74, indicating some demographic diversity among mid-sized clusters.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 df_clustered %>%
   count(Cluster) %>%
   ggplot(aes(x = factor(Cluster), y = n, fill = factor(Cluster))) +
@@ -120,7 +153,9 @@ df_clustered %>%
 
 ## Tumor Size by cluster
 
-```{r}
+The group of White females aged 60–64 and the group of White females aged 75–79 exhibit the largest median tumor sizes, along with wide variability and several extreme outliers, suggesting delayed diagnoses or more aggressive disease in these subpopulations. In contrast, the group of White females aged 70–74 has the smallest tumor sizes with a tighter distribution, potentially indicating earlier detection or lower underlying risk. Clusters dominated by non-White or “Other” race patients (e.g., females aged 75–79) display moderate to high tumor sizes, but with more consistent ranges, possibly reflecting systemic barriers to timely diagnosis. Interestingly, younger groups or smaller clusters do not always correspond to lower tumor burden, suggesting that age alone does not explain variation in tumor size.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 ggplot(df_clustered, aes(x = factor(Cluster), y = size, fill = factor(Cluster))) +
   geom_boxplot() +
   labs(

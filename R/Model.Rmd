@@ -11,26 +11,24 @@ output:
 \newpage
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4)
 library(tidyverse)
 library(brms)
 ```
 
 # Loading the Data In
 
+We double check that data structure is correct, pull a specific cancer to analyse (breast in this case), and reformat anything so our model runs smoothly.
+
 ```{r Load and Prep}
 df <- read.csv("../data/clean/seer_nov13.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
 str(df)
 ```
 
-## Subset Cancer Type
-
 ```{r Cancer choice}
 cancer_site <- df %>% filter(site == 50) #breast cancer
 str(cancer_site)
 ```
-
-## Reformulating for Readability
 
 ```{r Reformat}
 seer_df <- cancer_site %>% 
@@ -59,9 +57,7 @@ str(seer_df)
 
 # Model Initialization with Prior
 
-We will sample with No U-Turn Sampling (NUTS).
-
-We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
+We will sample with No U-Turn Sampling (NUTS). We assigned weakly informative priors to all model parameters. Fixed effects received independent Normal(0, 2²) priors, encouraging shrinkage without overly restricting plausible values. The intercept was assigned a wider Normal(0, 5²) prior to reflect uncertainty in baseline log-odds. Group-level standard deviations (for patientid and regionid) used Student-t(3, 0, 2.5) priors, which provide regularization while allowing for potential group-level variability.
 
 ## Model Specification
 
@@ -78,7 +74,7 @@ Logistic regression with:
     - Intercept $\sim \mathcal{N}(0, 5^2)$
     - Group SDs $\sim t_3(0, 2.5)$ (approx IG)
 
-```{r Model, echo=TRUE}
+```{r Model}
 priors <- c(
   prior(normal(0, 2), class = "b"), # Fixed effects ~ Normal(0, 2^2)
   prior(normal(0, 5), class = "Intercept"), # Intercept ~ Normal(0, 5^2)
@@ -103,13 +99,8 @@ brm_model <- brm(
   seed = 632,
   refresh = 2000 #suppress output
 )
-```
 
-## Opt. Stan Code 
-
-The model ran successfully. R uses a Stan backend, so if we need to document Stan code, run below:
-
-```{r STAN, echo=TRUE}
+# For Stan Backend
 #stancode(brm_model)
 ```
 
@@ -134,11 +125,7 @@ brm_model2 <- brm(formula = latestage ~ age + sex + raceth + grade + size_z + ye
   control = list(adapt_delta = 0.9995, max_treedepth = 15), init = 0,
   seed = 632, refresh = 3000 #suppress output
 )
-```
 
-# Saving the Model
-
-```{r Saving}
-write.csv(seer_df2, "../data/clean/seer_df2.csv", row.names = FALSE)
-saveRDS(brm_model2, "../R/breast_model.rds")
+# write.csv(seer_df2, "../data/clean/seer_df2.csv", row.names = FALSE)
+# saveRDS(brm_model2, "../R/breast_model.rds")
 ```

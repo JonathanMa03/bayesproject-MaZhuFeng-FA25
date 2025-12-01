@@ -11,7 +11,7 @@ output:
 \newpage
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, fig.width=6, fig.height=4)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
@@ -55,7 +55,7 @@ We use data from the [SEER Program](https://seer.cancer.gov/) focused on breast 
 seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
 ```
 
-We replace "Unknown" and "Blank(s)" with `NA`, and then keep only complete cases:
+We replace "Unknown" and "Blank(s)" with `NA`, and then analyse missing data. We want to see if missing data is specific to a group so we can determine if the missingness is MCAR or not.
 
 ```{r Rename}
 seer_prime <- seer %>%
@@ -78,7 +78,7 @@ seer_prime <- seer_prime %>%
   mutate(across(where(is.character), ~na_if(., "Blank(s)")))
 ```
 
-## Is missing data more common in older patients?
+Is missing data more common in older patients?
 
 ```{r}
 df <- seer_prime
@@ -96,13 +96,13 @@ ggplot(df, aes(x = age, fill = size_missing)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-## Is missing data associated with Race/Ethnicity?
+Is missing data associated with Race/Ethnicity?
 
 ```{r}
 table(df$raceth, is.na(df$size))
 ```
 
-## is stage more likely to be missing in nonmetro rural areas?
+Is stage more likely to be missing in nonmetro rural areas?
 
 ```{r}
 df <- df %>%
@@ -120,6 +120,7 @@ Logistic regression is a standard method for exploring missing data mechanisms. 
 If none of the predictors are significant, this supports the MCAR assumption. But if missingness is significantly associated with observed variables (as seen here), MCAR is rejected, and MAR becomes a more reasonable assumption for downstream modeling.
 
 ```{r}
+library(broom)
 # Create a missingness indicator for tumor size
 df$stage_miss <- is.na(df$stage)
 
@@ -136,12 +137,27 @@ df$size <- factor(df$size)
 miss_model <- glm(stage_miss ~ sex + raceth + region + age + marry + grade + size,
                   data = df, family = binomial)
 
-summary(miss_model)
+# Load required package
+library(broom)
+
+# Tidy the model output, add significance stars, and filter for p < 0.05
+miss_summary <- broom::tidy(miss_model) |>
+  dplyr::filter(p.value < 0.05) |>
+  dplyr::mutate(
+    signif = dplyr::case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      TRUE ~ ""
+    )
+  ) |>
+  dplyr::select(term, signif)
+
+# View the cleaned summary
+print(miss_summary)
 ```
 
-The missingness in stage is likely not MCAR, because missingness depends significantly on several observed variables (e.g., sex, raceth, region, age, marry, grade, size). Therefore, it’s reasonable to assume MAR (Missing at Random) for modeling purposes.
-
-## Selecting Complete Cases
+The missingness in stage is likely not MCAR, because missingness depends significantly on several observed variables (e.g., sex, raceth, region, age, marry, grade, size). Therefore, it’s reasonable to assume MAR (Missing at Random) for modeling purposes. We find we have 209123 cases to work with (4.06% of the whole thing) after removing "Unknown" and "Blank(s)" Values.
 
 ```{r}
 seer_prime <- seer_prime %>%
@@ -155,13 +171,11 @@ cat("Complete cases:", complete_cases, "out of", total_cases,
     sprintf("(%s%% complete)\n", percent_complete))
 ```
 
-we have 209123 cases to work with (4.06% of the whole thing) after removing "Unknown" and "Blank(s)" Values.
+# Variable-Specific Treatment
 
 Further cleaning is done via tabling all variables. 
 
-## Cancer Site
-
-We want to filter for top ten cancer sites (breast, lung, etc). We exclude 998 and 999 because they are unknown. The code is structured so we can switch sites.
+We want to filter for top ten cancer sites (breast, lung, etc). We exclude 998 and 999 because they are unknown.
 
 ```{r SITE}
 seer_prime <- seer_prime %>%
@@ -177,9 +191,7 @@ seer_prime <- seer_prime %>%
 table(seer_prime$site)
 ```
 
-## Region
-
-REGION: collapse and recode into ordered, interpretable regional factors, removes the Alaska/Hawaii “unknown” entries.
+Collapse and recode into ordered, interpretable regional factors, removes the Alaska/Hawaii “unknown” entries.
 
 ```{r REGION}
 seer_prime <- seer_prime %>%
@@ -195,9 +207,7 @@ seer_prime <- seer_prime %>%
 table(seer_prime$region)
 ```
 
-## Tumor Stage
-
-STAGE: restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
+Restrict to tumors that are invasive (drop In situ, Unknown/unstaged).
 
 ```{r STAGE}
 seer_prime <- seer_prime %>%
@@ -211,9 +221,7 @@ seer_prime <- seer_prime %>%
 table(seer_prime$stage)
 ```
 
-## Tumor Grade
-
-GRADE: extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.). Convert them to Start (1/2) and End (3/4) since our model is logistic
+Extract numeric grade 1–4; drop cell‑line entries (“B‑cell”, “T‑cell” etc.). Convert them to Start (1/2) and End (3/4) since our model is logistic.
 
 ```{r GRADE}
 seer_prime <- seer_prime %>%
@@ -235,9 +243,7 @@ seer_prime <- seer_prime %>%
 table(seer_prime$grade)
 ```
 
-## Tumor Size
-
-SIZE: Making this numeric and then filtering implausible values, we can bin these ("≤20mm", "21–50mm", "51–100mm", ">100mm") if needed. 
+Making this numeric and then filtering implausible values. 
 
 ```{r SIZE}
 seer_prime <- seer_prime %>%
@@ -248,9 +254,7 @@ seer_prime <- seer_prime %>%
 summary(seer_prime$size)
 ```
 
-## Marital Status
-
-MARRY: Making this binary, only married or unmarried. 
+Making this binary, only married or unmarried. 
 
 ```{r MARRY}
 seer_prime <- seer_prime %>%
@@ -264,9 +268,7 @@ seer_prime <- seer_prime %>%
 table(seer_prime$marry)
 ```
 
-## Race
-
-Recode RACETH to be three levels
+Recode RACETH to be three levels, Black, White, and Other.
 
 ```{r RACISM}
 seer_prime <- seer_prime %>%
@@ -292,7 +294,7 @@ cat("Remaining complete cases:", nrow(seer_prime), "\n")
 
 # Hierarchal Encoding
 
-To do hierarchal models in R, identifiers must be encoded as numeric integers (e.g., 1, 2, ..., N) for levels like REGION and ID.
+To do hierarchal models in R, identifiers must be encoded as numeric integers (e.g., 1, 2, ..., N) for levels like REGION and ID. We complete that, then set factor variables, and check resulting data structure.
 
 ```{r Hierarchy prep}
 seer_prime <- seer_prime %>%
@@ -300,29 +302,15 @@ seer_prime <- seer_prime %>%
     regionid = as.integer(factor(region)),
     patientid = as.integer(factor(id))
   )
-```
 
-Setting factor and checking data structure. 
-
-```{r Data Structure set}
 seer_prime <- seer_prime %>%
   mutate(
     age = factor(age),
     sex = factor(sex),
     raceth = factor(raceth),
   )
-```
 
-Inspect the data:
-
-```{r Inspection}
 str(seer_prime)
-```
 
-# Saving Final Data
-
-Code here so you can save it as CSV:  37530 observations of 13 variables
-
-```{r SAVING}
-write.csv(seer_prime, "../data/clean/seer_nov13.csv", row.names = FALSE)
+# write.csv(seer_prime, "../data/clean/seer_nov13.csv", row.names = FALSE)
 ```
