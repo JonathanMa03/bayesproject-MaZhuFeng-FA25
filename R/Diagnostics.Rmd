@@ -32,7 +32,7 @@ We see no scale reduction (Rhat=1.0 in all cases) and ESS are all sufficiently l
 
 ## VIF
 
-We check VIF, and confirm all values are reasonable.
+We check VIF, and confirm all values are reasonable, being around 1.
 
 ```{r VIF}
 car::vif(lm(latestage ~ age + sex + raceth + grade + size_z + year_z + marry, data = seer_df2))
@@ -46,4 +46,4 @@ Checking Posterior Draws
 pp_check(breast, ndraws = 100)
 ```
 
-Posterior draws look Ok as well.
+The graph displays the posterior predictive distribution, comparing the observed data (y, in dark blue) with replicated data generated from the model (y_rep, in light blue). The alignment between the two curves indicates that the model effectively captures the underlying data-generating process. Notably, the U-shaped pattern suggests a bimodal distribution of predicted probabilities, with concentrations near 0 and 1 and very few observations around 0.5, indicating high model certainty in classification. The tight overlay of y_rep lines around the observed y line suggests good model fit and calibration.

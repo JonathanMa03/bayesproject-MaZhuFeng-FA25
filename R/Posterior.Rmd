@@ -41,24 +41,23 @@ Below we visualize the fixed effect posterior estimates and 95% credible interva
 
 ```{r Fixed Effects}
 fe <- fixef(brm_model2, probs = c(0.025, 0.975))
-head(fe)
-
 plot_model(brm_model2, type = "est", show.values = TRUE, value.offset = 0.3)
 ```
 
+The odds ratio plot displays the estimated likelihood of being diagnosed at a late stage of cancer across various predictors, with 95% confidence intervals. Values above 1 indicate higher odds of late-stage diagnosis, while values below 1 suggest lower odds. Younger patients—particularly those aged 01–04, 05–09, 10–14, and 15–19 years—have odds ratios well below 1, indicating significantly lower risk of late-stage diagnosis. In contrast, certain middle-aged groups, such as 35–39 and 50–54 years, show elevated odds ratios above 2 or even 3, suggesting increased risk. Gender and marital status also play a role: male and unmarried patients are more likely to be diagnosed late. Notably, one covariate possibly related to tumor size or diagnosis year has an extremely high odds ratio of over 400, indicating a strong association with late-stage detection, though such a large value may suggest issues like rare events or data sparsity. 
+
 ## Random Effects (group level variation)
 
-The following summarizes the estimated random intercepts (shrinkage effects) for patient and region. These account for individual and regional variability unexplained by covariates.
+These posterior summaries indicate that region-level effects are weak or negligible in influencing late-stage diagnosis once individual-level variables are accounted for. The wide intervals reflect uncertainty, possibly due to small sample sizes within regions or limited regional variation.
 
 ```{r Random Effects}
 re <- ranef(brm_model2)
-head(re$patientid)
 head(re$regionid)
 ```
 
 ## Odds Ratios
 
-The odds ratio (OR) is the exponentiated posterior mean (or median) of each coefficient.
+The odds ratio (OR) is the exponentiated posterior mean (or median) of each coefficient. This table highlights the most influential predictors in the model. Strong, well-estimated effects include early tumor grade, other race, and tumor size. Age effects are mixed, with older adults generally at higher risk, but credible intervals widen in extreme age groups due to fewer observations.
 
 ```{r OR}
 odds_ratios <- exp(fe)
@@ -68,6 +67,8 @@ head(odds_df, 10)
 ```
 
 ## Marginal Effects 
+
+The marginal effects table confirms that tumor size and grade are the strongest predictors of the outcome. Age and race are meaningful, but less dominant. Sex, marital status, and year exert smaller effects. The magnitude and range of these effects help prioritize which variables matter most for prediction and interpretation.
 
 ```{r Marginal Effects}
 library(dplyr)
@@ -106,6 +107,8 @@ head(me_summary, 10)
 ```
 
 ## Shrinkage EFfects
+
+The shrinkage plots illustrate the estimated patient- and region-level random intercepts on the log-odds scale, capturing unobserved heterogeneity after accounting for covariates. At the patient level, there is substantial variation, with some individuals showing highly negative intercepts (indicating much lower odds of the outcome) and others showing strongly positive intercepts (indicating much higher odds), suggesting that latent individual-level factors significantly influence outcome risk. These estimates are subject to shrinkage, where extreme values are pulled toward the population mean to stabilize inference. In contrast, the region-level intercepts exhibit minimal variability: all three regions have posterior means near zero with wide credible intervals that span zero, indicating no strong regional effects after adjusting for other variables. Together, the plots reinforce that most of the residual variation lies at the patient level, not the regional level, justifying the hierarchical structure of the model.
 
 ```{r Shrinkage Effects}
 patient_re <- as.data.frame(re$patientid)
@@ -188,6 +191,8 @@ ggplot(region_compare, aes(x = reorder(regionid, raw_rate))) +
   theme_minimal()
 ```
 
+The plot visualizes the effect of Bayesian shrinkage on region-level estimates of late-stage diagnosis probabilities. Each region’s raw proportion (blue dots) is plotted alongside the corresponding posterior mean and 95% credible interval (red dots and error bars). Across all three regions, the raw rates of late-stage diagnosis vary slightly, but the posterior estimates are drawn toward the global average due to partial pooling. This is especially evident in regions with smaller sample sizes or greater uncertainty, where the posterior means are more conservative and the intervals wider. 
+
 ## Intra-Class Correlation
 
 ICC (intra-class correlation) quantifies the proportion of total variance attributable to grouping structure. Here we compute ICC for both patients and regions.
@@ -232,6 +237,8 @@ icc_table <- tibble(
 knitr::kable(icc_table, caption = "Posterior Intra-Class Correlation Estimates")
 ```
 
+The Patient-Level ICC (0.943) indicates that approximately 94.3% of the total variance in outcomes is due to differences between patients, with a narrow 95% credible interval of [0.841, 0.978]. This suggests strong patient-specific heterogeneity, meaning individual-level characteristics explain most of the variability in diagnosis outcomes. In contrast, the region-level ICC is 1.5%, with a wider credible interval of [0.000, 0.112], suggesting that very little variance is explained by differences between regions. The lower bound of zero and the upper bound just above 11% indicate weak and uncertain regional effects, possibly due to regional homogeneity or limited sample size at the region level.
+
 ```{r ICC Density}
 posterior %>%
   select(ICC_patientid, ICC_regionid) %>%
@@ -243,39 +250,11 @@ posterior %>%
   theme_minimal()
 ```
 
+The posterior ICC distribution plot vividly illustrates the stark contrast in variance explained at the patient and region levels. The red density curve, representing patient-level ICCs, is sharply concentrated near 1.0, indicating that for nearly all posterior samples, a very high proportion of outcome variability is attributed to individual patients. This reinforces strong within-patient clustering and heterogeneity in late-stage diagnosis risk. Conversely, the blue density curve for region-level ICCs is concentrated near 0, suggesting that region explains virtually none of the outcome variation, with most samples falling below 0.05. The non-overlapping and polarized nature of these distributions confirms that individual-level effects dominate, while regional variation is minimal and likely negligible in the context of this hierarchical model.
+
 # Preparing Data for Clustering
 
-We want to do BGMM, so we need to standardizee values after extracting. These dfs are named and exported:
-
-- dfRE_P is the best candidate for patient-level clustering with BGMM.
-
-- dfRE_R is too small (3 obs), so not suited for BGMM, can just descriptively summarize it.
-
-- dfFE and dfOR match in size and likely map onto your 27 predictors 
-
-- dfPOST has ~3,000 rows
-
-Maybe run PCA before clustering?
-
-Posterior Summary:
-
-```{r dfPOST}
-dfPOST <- as.data.frame(posterior_summary)
-dfPOST <- tibble::rownames_to_column(dfPOST, var = "Parameter")
-dfPOST <- dfPOST %>%
-  mutate(shrinkage = Q97.5 - Q2.5)
-```
-
-Fixed Effects:
-
-```{r dfFE}
-dfFE <- as.data.frame(fe)
-dfFE <- tibble::rownames_to_column(dfFE, var = "Predictor")
-dfFE <- dfFE %>%
-  mutate(shrinkage = Q97.5 - Q2.5)
-```
-
-Patient Random Effects:
+We want to do BGMM, so we need to standardizee values after extracting. Since we are interested in patient clustering, we will use dfRE_P, the summary for patient level random effects.
 
 ```{r dfRE_P}
 dfRE_P <- as.data.frame(re$patientid)
@@ -283,43 +262,6 @@ dfRE_P <- tibble::rownames_to_column(dfRE_P, var = "PatientID")
 dfRE_P <- dfRE_P %>%
   mutate(shrinkage = Q97.5.Intercept - Q2.5.Intercept)
 ```
-
-Region Random Effects:
-
-```{r dfRE_R}
-dfRE_R <- as.data.frame(re$regionid)
-dfRE_R <- tibble::rownames_to_column(dfRE_R, var = "RegionID")
-dfRE_R <- dfRE_R %>%
-  mutate(shrinkage = Q97.5.Intercept - Q2.5.Intercept)
-```
-
-Marginal Effects:
-
-```{r dfME}
-dfME <- me_combined %>%
-  select(variable, effect1__, estimate__, se__, lower__, upper__) %>%
-  rename(
-    Level = effect1__,
-    Estimate = estimate__,
-    SE = se__,
-    Lower = lower__,
-    Upper = upper__
-  ) %>%
-  mutate(shrinkage = Upper - Lower)
-```
-
-Odds Ratios:
-
-```{r dfOR}
-dfOR <- odds_df %>%
-  tibble::rownames_to_column(var = "Predictor") %>%
-  mutate(
-    logOR = log(Estimate),
-    shrinkage = Q97.5 - Q2.5
-  )
-```
-
-## Saving Data for Clustering
 
 ```{r Standardize and Save}
 standardize_df <- function(df, id_col = NULL) {
@@ -334,21 +276,6 @@ standardize_df <- function(df, id_col = NULL) {
   }
 }
 
-dfPOST_std <- standardize_df(dfPOST, id_col = "Parameter")
-write.csv(dfPOST_std, "../data/clean/dfPOST.csv", row.names = FALSE)
-
-dfFE_std <- standardize_df(dfFE, id_col = "Predictor")
-write.csv(dfFE_std, "../data/clean/dfFE.csv", row.names = FALSE)
-
 dfRE_P_std <- standardize_df(dfRE_P, id_col = "PatientID")
-write.csv(dfRE_P_std, "../data/clean/dfRE_P.csv", row.names = FALSE)
-
-dfRE_R_std <- standardize_df(dfRE_R, id_col = "RegionID")
-write.csv(dfRE_R_std, "../data/clean/dfRE_R.csv", row.names = FALSE)
-
-dfME_std <- standardize_df(dfME)
-write.csv(dfME_std, "../data/clean/dfME.csv", row.names = FALSE)
-
-dfOR_std <- standardize_df(dfOR, id_col = "Predictor")
-write.csv(dfOR_std, "../data/clean/dfOR.csv", row.names = FALSE)
+# write.csv(dfRE_P_std, "../data/clean/dfRE_P.csv", row.names = FALSE)
 ```
