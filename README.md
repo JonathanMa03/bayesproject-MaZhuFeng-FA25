@@ -9,13 +9,13 @@ This repository hosts the R Project for **EN.553.632 Bayesian Statistics (Fall 2
 
 ## Project Overview
 
-The goal of this project is to build a **Bayesian hierarchical model** to investigate how tumor severity indicators (e.g., stage, grade, size) vary by **patient-level** and **region-level** characteristics. Using **individual-level cancer records** from the **SEER Public Use Research Database**, the project focuses on:
+The goal of this project is to utilize a **Bayesian Hierarchical Logistic Regression** to investigate how tumor severity indicators (e.g., stage, grade, size) vary by **patient-level** and **region-level** characteristics. Using **individual-level cancer records** from the **SEER Public Use Research Database**, the project focuses on:
 
 - **Characterizing tumors** by stage, grade, and size across diverse patient demographics  
 - **Quantifying variation** across patients and geographic regions using multilevel models  
 - **Estimating uncertainty** in severity indicators via full Bayesian inference  
 - **Clustering patients or regions** based on posterior summaries to identify latent risk structures  
-- **Validating** model fit through posterior predictive checks and MCMC diagnostics 
+- **Validating** model fit through posterior predictive checks and convergence diagnostics 
 
 ---
 
@@ -33,29 +33,31 @@ Each row in the dataset represents an individual tumor with variables on tumor s
 
 ---
 
-## 🔍 Methodology
+## Methodology
 
 ### 1. Bayesian Hierarchical Modeling
 
-- **Outcome:** Tumor stage, grade, or size (modeled separately or jointly)  
-- **Levels:** Tumor (observed), nested within Patient ID, nested within Region  
-- **Priors:** Weakly informative Normal and Half-Cauchy priors for regression and variance terms  
-- **Software:** `brms` (via Stan), with option to export to JAGS
+- **Outcome:** Tumor Stage, either early (I/II) or late (III/IV) 
+- **Levels:** Tumor (observed), nested within Patients (Random EFfect), nested within Regions (Random Effect)
+- **Priors:** Weakly informative Normal and Student-t priors for regression and variance terms  
+- **Software:** `brms` (via Stan) in R
 
 ### 2. Posterior Inference & Prediction
 
 - Extract posterior distributions of severity indicators  
+- Look at Marginal, Random, and Fixed Effects
+- Check Odds Ratios for marginal interpretations
 - Compare across race, sex, marital status, and regional types  
+- Predict with 100 predictive draws
 
 ### 3. Latent Structure Discovery
 
-- Cluster patients or regions based on posterior means or medians  
+- Cluster patients or regions based on posterior means
 - Identify demographic or geographic segments with higher predicted severity  
 
 ### 4. Diagnostics and Model Validation
 
-- Assess convergence (R-hat, ESS), trace plots, and posterior predictive checks  
-- Cross-validation via LOO or WAIC for model comparison  
+- Assess convergence (R-hat, ESS), variance inflation, and posterior predictive checks  
 
 ---
 
@@ -64,28 +66,36 @@ Each row in the dataset represents an individual tumor with variables on tumor s
 
 ```text
 bayesproject-MaZhuFeng-FA25/
-├── R/                     # Analysis scripts and RMarkdown modules
-│   ├── EDA.Rmd            # Exploratory data analysis and cleaning
-│   ├── Model.Rmd          # Model specification and fitting
-│   ├── Posterior.Rmd      # Posterior sampling and summaries
-│   ├── Clustering.Rmd     # Clustering or grouping analysis
-│   ├── Diagnostics.Rmd    # Convergence and model diagnostic checks
-│   └── Dashboard.Rmd      # (Optional) Shiny or visualization dashboard
+├── R/                            # Analysis scripts and RMarkdown modules
+│   ├── EDA.Rmd                   # Exploratory data analysis and cleaning
+│   ├── Model.Rmd                 # Model specification and fitting
+│   ├── Posterior.Rmd             # Posterior sampling and summaries
+│   ├── Clustering.Rmd            # Clustering or grouping analysis
+│   ├── breast_model.rds          # Model file to save on computation time
+│   └── Diagnostics.Rmd           # Convergence and model diagnostic checks
 │
 ├── data/
-│   └── raw/               # Immutable input datasets
-│       ├── RAWDATA.md.    # Instructions on how to download the data
-│   └── cleaned/           # Versions of cleaned data
-│       ├── seer_nov10.csv    # cleaned data subset
+│   └── raw/                      # Immutable input datasets
+│       ├── RAWDATA.md.           # Instructions on how to download the data
+│   └── cleaned/                  # Versions of cleaned data
+│       ├── seer_nov10.csv        # cleaned data subset
+│       ├── seer_df2.csv          # Standardized subset of data
+│       └── dfRE_P.csv            # Patient Random EFfects for Clustering
 │
-├── docs/                  # Documentation and team coordination
-│   ├── CHANGELOG.md       # Project updates and version history
-│   ├── Contributions.md   # Collaboration guidelines and author credits
-│   ├── SETUP.md           # Environment setup and package requirements
-│   └── TODO.md            # Pending tasks and milestones
+├── docs/                         # Documentation and team coordination
+│   ├── CHANGELOG.md              # Project updates and version history
+│   ├── Contributions.md          # Collaboration guidelines and author credits
+│   ├── SETUP.md                  # Environment setup and package requirements
 │
-├── .gitignore             # Files and folders excluded from Git tracking
-├── LICENSE                # Usage license
-├── README.md              # Project overview 
+├── Reports/                      # Knitted and polished RMD Files
+│   ├── DataCleaning.pdf          # Exploratory data analysis and cleaning
+│   ├── ModelSpecification.pdf    # Model specification and fitting
+│   ├── ModelDiagnostics.pdf      # Posterior sampling and summaries
+│   ├── PosteriorAnalysis.pdf     # Clustering or grouping analysis
+│   └── ClusteringAnalysis.pdf    # Convergence and model diagnostic checks
+├── .gitignore                    # Files and folders excluded from Git tracking
+├── 01_Ma_Zhu_Feng.pdf            # Presentation Slides
+├── LICENSE                       # Usage license
+├── README.md                     # Project overview 
 └── bayesproject-MaZhuFeng-FA25.Rproj  # RStudio project file (don't commit this)
 ```
