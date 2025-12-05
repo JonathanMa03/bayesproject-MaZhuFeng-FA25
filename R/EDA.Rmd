@@ -120,21 +120,22 @@ Logistic regression is a standard method for exploring missing data mechanisms. 
 If none of the predictors are significant, this supports the MCAR assumption. But if missingness is significantly associated with observed variables (as seen here), MCAR is rejected, and MAR becomes a more reasonable assumption for downstream modeling.
 
 ```{r}
-# The following code is not run to suppress output, may take a couple minutes
+library(broom)
+library(knitr)
+df$stage_miss <- is.na(df$stage)
+df$sex <- factor(df$sex)
+df$raceth <- factor(df$raceth)
+df$region <- factor(df$region)
+df$age <- factor(df$age)
+df$marry <- factor(df$marry)
+df$grade <- factor(df$grade)
+df$size <- factor(df$size)
 
-# library(broom)
-# df$stage_miss <- is.na(df$stage)
-# df$sex <- factor(df$sex)
-# df$raceth <- factor(df$raceth)
-# df$region <- factor(df$region)
-# df$age <- factor(df$age)
-# df$marry <- factor(df$marry)
-# df$grade <- factor(df$grade)
-# df$size <- factor(df$size)
-# 
-# miss_model <- glm(stage_miss ~ sex + raceth + region + age + marry + grade + size,
-#                   data = df, family = binomial)
-# summary(miss_model)
+miss_model <- glm(stage_miss ~ sex + raceth + region + age + marry + grade + size,
+                   data = df, family = binomial)
+tidy_miss <- tidy(miss_model)
+significant_results <- tidy_miss[tidy_miss$p.value < 0.05, ]
+kable(significant_results, caption = "Significant Predictors of Missingness")
 ```
 
 The missingness in stage is likely not MCAR, because missingness depends significantly on several observed variables (e.g., sex, raceth, region, age, marry, grade, size). Therefore, it’s reasonable to assume MAR (Missing at Random) for modeling purposes. We find we have 209123 cases to work with (4.06% of the whole thing) after removing "Unknown" and "Blank(s)" Values.
