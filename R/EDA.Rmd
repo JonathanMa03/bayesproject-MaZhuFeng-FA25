@@ -53,6 +53,13 @@ We use data from the [SEER Program](https://seer.cancer.gov/) focused on breast 
 
 ```{r Data Loading}
 seer <- read.delim("../data/raw/breastcancer.txt", sep = "\t", header = FALSE, stringsAsFactors = FALSE)
+
+# For installing all packages required
+install.packages(c(
+  "broom", "knitr", "tidyverse", "dplyr", "ggplot2", "stringr",
+  "ggthemes", "scales", "brms", "bayesplot", "rstan",
+  "caret", "sjPlot", "tidyr", "mclust"
+))
 ```
 
 We replace "Unknown" and "Blank(s)" with `NA`, and then analyse missing data. We want to see if missing data is specific to a group so we can determine if the missingness is MCAR or not.
