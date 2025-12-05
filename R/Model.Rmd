@@ -127,5 +127,5 @@ brm_model2 <- brm(formula = latestage ~ age + sex + raceth + grade + size_z + ye
 )
 
 # write.csv(seer_df2, "../data/clean/seer_df2.csv", row.names = FALSE)
-# saveRDS(brm_model2, "../R/breast_model.rds")
+saveRDS(brm_model2, "../R/breast_model.rds")
 ```
