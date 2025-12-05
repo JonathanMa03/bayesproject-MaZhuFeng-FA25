@@ -43,7 +43,7 @@ car::vif(lm(latestage ~ age + sex + raceth + grade + size_z + year_z + marry, da
 Checking Posterior Draws
 
 ```{r PP Draws, echo=TRUE}
-pp_check(breast, ndraws = 100)
+pp_check(breast, type = "stat")
 ```
 
-The graph displays the posterior predictive distribution, comparing the observed data (y, in dark blue) with replicated data generated from the model (y_rep, in light blue). The alignment between the two curves indicates that the model effectively captures the underlying data-generating process. Notably, the U-shaped pattern suggests a bimodal distribution of predicted probabilities, with concentrations near 0 and 1 and very few observations around 0.5, indicating high model certainty in classification. The tight overlay of y_rep lines around the observed y line suggests good model fit and calibration.
+The graph displays the posterior predictive distribution of the mean, comparing the observed mean of the outcome variable ($T(y)$, dark vertical line) to the distribution of means from replicated datasets generated under the fitted model ($T(y_{\text{rep}})$, light blue histogram). The close alignment between the observed and replicated means indicates that the model accurately captures the central tendency of the data. The symmetric and narrow distribution of $T(y_{\text{rep}})$ further suggests low variability and good calibration of the model’s predictions.
